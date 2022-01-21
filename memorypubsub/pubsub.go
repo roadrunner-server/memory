@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type driver struct {
+type Driver struct {
 	sync.RWMutex
 	// channel with the messages from the RPC
 	pushCh chan *pubsub.Message
@@ -19,8 +19,8 @@ type driver struct {
 	log     *zap.Logger
 }
 
-func NewPubSubDriver(log *zap.Logger, _ string) (*driver, error) {
-	ps := &driver{
+func NewPubSubDriver(log *zap.Logger, _ string) (*Driver, error) {
+	ps := &Driver{
 		pushCh:  make(chan *pubsub.Message, 100),
 		storage: bst.NewBST(),
 		log:     log,
@@ -28,18 +28,18 @@ func NewPubSubDriver(log *zap.Logger, _ string) (*driver, error) {
 	return ps, nil
 }
 
-func (d *driver) Publish(msg *pubsub.Message) error {
+func (d *Driver) Publish(msg *pubsub.Message) error {
 	d.pushCh <- msg
 	return nil
 }
 
-func (d *driver) PublishAsync(msg *pubsub.Message) {
+func (d *Driver) PublishAsync(msg *pubsub.Message) {
 	go func() {
 		d.pushCh <- msg
 	}()
 }
 
-func (d *driver) Subscribe(connectionID string, topics ...string) error {
+func (d *Driver) Subscribe(connectionID string, topics ...string) error {
 	d.Lock()
 	defer d.Unlock()
 	for i := 0; i < len(topics); i++ {
@@ -48,7 +48,7 @@ func (d *driver) Subscribe(connectionID string, topics ...string) error {
 	return nil
 }
 
-func (d *driver) Unsubscribe(connectionID string, topics ...string) error {
+func (d *Driver) Unsubscribe(connectionID string, topics ...string) error {
 	d.Lock()
 	defer d.Unlock()
 	for i := 0; i < len(topics); i++ {
@@ -57,7 +57,7 @@ func (d *driver) Unsubscribe(connectionID string, topics ...string) error {
 	return nil
 }
 
-func (d *driver) Connections(topic string, res map[string]struct{}) {
+func (d *Driver) Connections(topic string, res map[string]struct{}) {
 	d.RLock()
 	defer d.RUnlock()
 
@@ -67,11 +67,11 @@ func (d *driver) Connections(topic string, res map[string]struct{}) {
 	}
 }
 
-func (d *driver) Stop() {
+func (d *Driver) Stop() {
 	// no-op for the in-memory
 }
 
-func (d *driver) Next(ctx context.Context) (*pubsub.Message, error) {
+func (d *Driver) Next(ctx context.Context) (*pubsub.Message, error) {
 	const op = errors.Op("pubsub_memory")
 	select {
 	case msg := <-d.pushCh:

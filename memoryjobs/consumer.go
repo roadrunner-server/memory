@@ -24,7 +24,7 @@ type Config struct {
 	Prefetch uint64 `mapstructure:"prefetch"`
 }
 
-type consumer struct {
+type Consumer struct {
 	cfg           *Config
 	log           *zap.Logger
 	pipeline      atomic.Value
@@ -42,10 +42,10 @@ type consumer struct {
 	stopCh    chan struct{}
 }
 
-func FromConfig(configKey string, log *zap.Logger, cfg config.Configurer, pq priorityqueue.Queue) (*consumer, error) {
+func FromConfig(configKey string, log *zap.Logger, cfg config.Configurer, pq priorityqueue.Queue) (*Consumer, error) {
 	const op = errors.Op("new_ephemeral_pipeline")
 
-	jb := &consumer{
+	jb := &Consumer{
 		log:        log,
 		pq:         pq,
 		goroutines: 0,
@@ -79,8 +79,8 @@ func FromConfig(configKey string, log *zap.Logger, cfg config.Configurer, pq pri
 	return jb, nil
 }
 
-func FromPipeline(pipeline *pipeline.Pipeline, log *zap.Logger, pq priorityqueue.Queue) (*consumer, error) {
-	return &consumer{
+func FromPipeline(pipeline *pipeline.Pipeline, log *zap.Logger, pq priorityqueue.Queue) (*Consumer, error) {
+	return &Consumer{
 		log:           log,
 		pq:            pq,
 		localPrefetch: make(chan *Item, pipeline.Int(prefetch, 100_000)),
@@ -92,7 +92,7 @@ func FromPipeline(pipeline *pipeline.Pipeline, log *zap.Logger, pq priorityqueue
 	}, nil
 }
 
-func (c *consumer) Push(ctx context.Context, jb *jobs.Job) error {
+func (c *Consumer) Push(ctx context.Context, jb *jobs.Job) error {
 	const op = errors.Op("ephemeral_push")
 	// check if the pipeline registered
 	_, ok := c.pipeline.Load().(*pipeline.Pipeline)
@@ -108,7 +108,7 @@ func (c *consumer) Push(ctx context.Context, jb *jobs.Job) error {
 	return nil
 }
 
-func (c *consumer) State(_ context.Context) (*jobs.State, error) {
+func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
 	pipe := c.pipeline.Load().(*pipeline.Pipeline)
 	return &jobs.State{
 		Pipeline: pipe.Name(),
@@ -120,12 +120,12 @@ func (c *consumer) State(_ context.Context) (*jobs.State, error) {
 	}, nil
 }
 
-func (c *consumer) Register(_ context.Context, pipeline *pipeline.Pipeline) error {
+func (c *Consumer) Register(_ context.Context, pipeline *pipeline.Pipeline) error {
 	c.pipeline.Store(pipeline)
 	return nil
 }
 
-func (c *consumer) Run(_ context.Context, pipe *pipeline.Pipeline) error {
+func (c *Consumer) Run(_ context.Context, pipe *pipeline.Pipeline) error {
 	const op = errors.Op("memory_jobs_run")
 	t := time.Now()
 
@@ -143,7 +143,7 @@ func (c *consumer) Run(_ context.Context, pipe *pipeline.Pipeline) error {
 	return nil
 }
 
-func (c *consumer) Pause(_ context.Context, p string) {
+func (c *Consumer) Pause(_ context.Context, p string) {
 	start := time.Now()
 	pipe := c.pipeline.Load().(*pipeline.Pipeline)
 	if pipe.Name() != p {
@@ -159,13 +159,13 @@ func (c *consumer) Pause(_ context.Context, p string) {
 
 	atomic.AddUint32(&c.listeners, ^uint32(0))
 
-	// stop the consumer
+	// stop the Consumer
 	c.stopCh <- struct{}{}
 
 	c.log.Debug("pipeline was paused", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().String()), zap.String("elapsed", time.Since(start).String()))
 }
 
-func (c *consumer) Resume(_ context.Context, p string) {
+func (c *Consumer) Resume(_ context.Context, p string) {
 	start := time.Now()
 	pipe := c.pipeline.Load().(*pipeline.Pipeline)
 	if pipe.Name() != p {
@@ -179,14 +179,14 @@ func (c *consumer) Resume(_ context.Context, p string) {
 		return
 	}
 
-	// resume the consumer on the same channel
+	// resume the Consumer on the same channel
 	c.consume()
 
 	atomic.StoreUint32(&c.listeners, 1)
 	c.log.Debug("pipeline was resumed", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().String()), zap.String("elapsed", time.Since(start).String()))
 }
 
-func (c *consumer) Stop(_ context.Context) error {
+func (c *Consumer) Stop(_ context.Context) error {
 	start := time.Now()
 	pipe := c.pipeline.Load().(*pipeline.Pipeline)
 
@@ -207,7 +207,7 @@ func (c *consumer) Stop(_ context.Context) error {
 	return nil
 }
 
-func (c *consumer) handleItem(ctx context.Context, msg *Item) error {
+func (c *Consumer) handleItem(ctx context.Context, msg *Item) error {
 	const op = errors.Op("ephemeral_handle_request")
 	// handle timeouts
 	// theoretically, some bad user may send millions requests with a delay and produce a billion (for example)
@@ -247,7 +247,7 @@ func (c *consumer) handleItem(ctx context.Context, msg *Item) error {
 	}
 }
 
-func (c *consumer) consume() {
+func (c *Consumer) consume() {
 	go func() {
 		// redirect
 		for {
