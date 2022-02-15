@@ -4,9 +4,10 @@ import (
 	"context"
 	"sync"
 
+	"github.com/roadrunner-server/api/v2/bst"
 	"github.com/roadrunner-server/api/v2/plugins/pubsub"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/sdk/v2/bst"
+	bstImpl "github.com/roadrunner-server/sdk/v2/bst"
 	"go.uber.org/zap"
 )
 
@@ -22,7 +23,7 @@ type Driver struct {
 func NewPubSubDriver(log *zap.Logger, _ string) (*Driver, error) {
 	ps := &Driver{
 		pushCh:  make(chan *pubsub.Message, 100),
-		storage: bst.NewBST(),
+		storage: bstImpl.NewBST(),
 		log:     log,
 	}
 	return ps, nil

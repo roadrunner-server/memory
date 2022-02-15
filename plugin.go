@@ -7,12 +7,12 @@ import (
 	"github.com/roadrunner-server/api/v2/plugins/jobs/pipeline"
 	"github.com/roadrunner-server/api/v2/plugins/kv"
 	"github.com/roadrunner-server/api/v2/plugins/pubsub"
+	priorityqueue "github.com/roadrunner-server/api/v2/pq"
 	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/memory/v2/memoryhttpcache"
 	"github.com/roadrunner-server/memory/v2/memoryjobs"
 	"github.com/roadrunner-server/memory/v2/memorykv"
 	"github.com/roadrunner-server/memory/v2/memorypubsub"
-	priorityqueue "github.com/roadrunner-server/sdk/v2/priority_queue"
 	"go.uber.org/zap"
 )
 
