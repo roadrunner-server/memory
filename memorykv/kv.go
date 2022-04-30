@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/roadrunner-server/api/v2/plugins/config"
-	kvv1 "github.com/roadrunner-server/api/v2/proto/kv/v1"
 	"github.com/roadrunner-server/errors"
+	kvv1 "go.buf.build/protocolbuffers/go/roadrunner-server/api/proto/kv/v1"
 	"go.uber.org/zap"
 )
 
