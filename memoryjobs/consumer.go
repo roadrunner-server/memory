@@ -112,6 +112,7 @@ func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
 	pipe := c.pipeline.Load().(*pipeline.Pipeline)
 	return &jobs.State{
 		Pipeline: pipe.Name(),
+		Priority: uint64(pipe.Priority()),
 		Driver:   pipe.Driver(),
 		Queue:    pipe.Name(),
 		Active:   atomic.LoadInt64(c.active),
