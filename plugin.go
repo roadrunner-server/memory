@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"github.com/roadrunner-server/api/v2/plugins/cache"
 	"github.com/roadrunner-server/api/v2/plugins/config"
 	"github.com/roadrunner-server/api/v2/plugins/jobs"
 	"github.com/roadrunner-server/api/v2/plugins/jobs/pipeline"
@@ -9,7 +8,6 @@ import (
 	"github.com/roadrunner-server/api/v2/plugins/pubsub"
 	priorityqueue "github.com/roadrunner-server/api/v2/pq"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/memory/v2/memoryhttpcache"
 	"github.com/roadrunner-server/memory/v2/memoryjobs"
 	"github.com/roadrunner-server/memory/v2/memorykv"
 	"github.com/roadrunner-server/memory/v2/memorypubsub"
@@ -35,10 +33,6 @@ func (p *Plugin) Name() string {
 }
 
 // Drivers implementation
-
-func (p *Plugin) FromConfig(log *zap.Logger) (cache.Cache, error) {
-	return memoryhttpcache.NewCacheDriver(log)
-}
 
 func (p *Plugin) PubSubFromConfig(key string) (pubsub.PubSub, error) {
 	return memorypubsub.NewPubSubDriver(p.log, key)
