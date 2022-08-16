@@ -27,7 +27,7 @@ type Config struct {
 type Consumer struct {
 	cfg           *Config
 	log           *zap.Logger
-	pipeline      atomic.Value
+	pipeline      atomic.Pointer[pipeline.Pipeline]
 	pq            priorityqueue.Queue
 	localPrefetch chan *Item
 
@@ -95,8 +95,8 @@ func FromPipeline(pipeline *pipeline.Pipeline, log *zap.Logger, pq priorityqueue
 func (c *Consumer) Push(ctx context.Context, jb *jobs.Job) error {
 	const op = errors.Op("ephemeral_push")
 	// check if the pipeline registered
-	_, ok := c.pipeline.Load().(*pipeline.Pipeline)
-	if !ok {
+	pipe := c.pipeline.Load()
+	if pipe == nil {
 		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.Options.Pipeline))
 	}
 
@@ -109,7 +109,7 @@ func (c *Consumer) Push(ctx context.Context, jb *jobs.Job) error {
 }
 
 func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
-	pipe := c.pipeline.Load().(*pipeline.Pipeline)
+	pipe := c.pipeline.Load()
 	return &jobs.State{
 		Pipeline: pipe.Name(),
 		Priority: uint64(pipe.Priority()),
@@ -146,7 +146,7 @@ func (c *Consumer) Run(_ context.Context, pipe *pipeline.Pipeline) error {
 
 func (c *Consumer) Pause(_ context.Context, p string) {
 	start := time.Now()
-	pipe := c.pipeline.Load().(*pipeline.Pipeline)
+	pipe := c.pipeline.Load()
 	if pipe.Name() != p {
 		c.log.Error("no such pipeline", zap.String("pause was requested: ", p))
 	}
@@ -168,7 +168,7 @@ func (c *Consumer) Pause(_ context.Context, p string) {
 
 func (c *Consumer) Resume(_ context.Context, p string) {
 	start := time.Now()
-	pipe := c.pipeline.Load().(*pipeline.Pipeline)
+	pipe := c.pipeline.Load()
 	if pipe.Name() != p {
 		c.log.Error("no such pipeline", zap.String("resume was requested: ", p))
 	}
@@ -189,7 +189,7 @@ func (c *Consumer) Resume(_ context.Context, p string) {
 
 func (c *Consumer) Stop(_ context.Context) error {
 	start := time.Now()
-	pipe := c.pipeline.Load().(*pipeline.Pipeline)
+	pipe := c.pipeline.Load()
 
 	select {
 	case c.stopCh <- struct{}{}:

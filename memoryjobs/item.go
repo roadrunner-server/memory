@@ -107,7 +107,7 @@ func (i *Item) Requeue(headers map[string][]string, delay int64) error {
 }
 
 // Respond for the in-memory is no-op
-func (i *Item) Respond(data []byte, queue string) error {
+func (i *Item) Respond([]byte, string) error {
 	return nil
 }
 
