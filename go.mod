@@ -3,7 +3,7 @@ module github.com/roadrunner-server/memory/v2
 go 1.19
 
 require (
-	github.com/goccy/go-json v0.9.10
+	github.com/goccy/go-json v0.9.11
 	github.com/roadrunner-server/api/v2 v2.21.0
 	github.com/roadrunner-server/errors v1.2.0
 	github.com/roadrunner-server/sdk/v2 v2.18.3
