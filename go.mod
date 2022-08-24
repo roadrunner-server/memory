@@ -8,7 +8,7 @@ require (
 	github.com/roadrunner-server/errors v1.2.0
 	github.com/roadrunner-server/sdk/v2 v2.18.4
 	go.buf.build/protocolbuffers/go/roadrunner-server/api v1.3.12
-	go.uber.org/zap v1.22.0
+	go.uber.org/zap v1.23.0
 )
 
 require (
