@@ -4,37 +4,35 @@ import (
 	"context"
 	"sync"
 
-	"github.com/roadrunner-server/api/v2/bst"
-	"github.com/roadrunner-server/api/v2/plugins/pubsub"
 	"github.com/roadrunner-server/errors"
-	bstImpl "github.com/roadrunner-server/sdk/v2/bst"
+	"github.com/roadrunner-server/sdk/v3/bst"
+	"github.com/roadrunner-server/sdk/v3/plugins/pubsub"
 	"go.uber.org/zap"
 )
 
 type Driver struct {
 	sync.RWMutex
 	// channel with the messages from the RPC
-	pushCh chan *pubsub.Message
+	pushCh chan pubsub.Message
 	// user-subscribed topics
-	storage bst.Storage
+	storage *bst.BST
 	log     *zap.Logger
 }
 
 func NewPubSubDriver(log *zap.Logger, _ string) (*Driver, error) {
-	ps := &Driver{
-		pushCh:  make(chan *pubsub.Message, 100),
-		storage: bstImpl.NewBST(),
+	return &Driver{
+		pushCh:  make(chan pubsub.Message, 100),
+		storage: bst.NewBST(),
 		log:     log,
-	}
-	return ps, nil
+	}, nil
 }
 
-func (d *Driver) Publish(msg *pubsub.Message) error {
+func (d *Driver) Publish(msg pubsub.Message) error {
 	d.pushCh <- msg
 	return nil
 }
 
-func (d *Driver) PublishAsync(msg *pubsub.Message) {
+func (d *Driver) PublishAsync(msg pubsub.Message) {
 	go func() {
 		d.pushCh <- msg
 	}()
@@ -72,7 +70,7 @@ func (d *Driver) Stop() {
 	// no-op for the in-memory
 }
 
-func (d *Driver) Next(ctx context.Context) (*pubsub.Message, error) {
+func (d *Driver) Next(ctx context.Context) (pubsub.Message, error) {
 	const op = errors.Op("pubsub_memory")
 	select {
 	case msg := <-d.pushCh:
@@ -86,7 +84,7 @@ func (d *Driver) Next(ctx context.Context) (*pubsub.Message, error) {
 		// TODO(rustatian) better???
 		// if we have active subscribers - send a message to a topic
 		// or send nil instead
-		if ok := d.storage.Contains(msg.Topic); ok {
+		if ok := d.storage.Contains(msg.Topic()); ok {
 			return msg, nil
 		}
 	case <-ctx.Done():

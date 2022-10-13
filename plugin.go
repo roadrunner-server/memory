@@ -1,16 +1,14 @@
 package memory
 
 import (
-	"github.com/roadrunner-server/api/v2/plugins/config"
-	"github.com/roadrunner-server/api/v2/plugins/jobs"
-	"github.com/roadrunner-server/api/v2/plugins/jobs/pipeline"
-	"github.com/roadrunner-server/api/v2/plugins/kv"
-	"github.com/roadrunner-server/api/v2/plugins/pubsub"
-	priorityqueue "github.com/roadrunner-server/api/v2/pq"
-	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/memory/v2/memoryjobs"
-	"github.com/roadrunner-server/memory/v2/memorykv"
-	"github.com/roadrunner-server/memory/v2/memorypubsub"
+	"github.com/roadrunner-server/memory/v3/memoryjobs"
+	"github.com/roadrunner-server/memory/v3/memorykv"
+	"github.com/roadrunner-server/memory/v3/memorypubsub"
+	"github.com/roadrunner-server/sdk/v3/plugins/jobs"
+	"github.com/roadrunner-server/sdk/v3/plugins/jobs/pipeline"
+	"github.com/roadrunner-server/sdk/v3/plugins/kv"
+	"github.com/roadrunner-server/sdk/v3/plugins/pubsub"
+	priorityqueue "github.com/roadrunner-server/sdk/v3/priority_queue"
 	"go.uber.org/zap"
 )
 
@@ -18,10 +16,17 @@ const PluginName string = "memory"
 
 type Plugin struct {
 	log *zap.Logger
-	cfg config.Configurer
+	cfg Configurer
 }
 
-func (p *Plugin) Init(log *zap.Logger, cfg config.Configurer) error {
+type Configurer interface {
+	// UnmarshalKey takes a single key and unmarshal it into a Struct.
+	UnmarshalKey(name string, out any) error
+	// Has checks if config section exists.
+	Has(name string) bool
+}
+
+func (p *Plugin) Init(log *zap.Logger, cfg Configurer) error {
 	p.log = new(zap.Logger)
 	*p.log = *log
 	p.cfg = cfg
@@ -39,12 +44,7 @@ func (p *Plugin) PubSubFromConfig(key string) (pubsub.PubSub, error) {
 }
 
 func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
-	const op = errors.Op("memory_plugin_construct")
-	st, err := memorykv.NewInMemoryDriver(key, p.log, p.cfg)
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-	return st, nil
+	return memorykv.NewInMemoryDriver(key, p.log, p.cfg)
 }
 
 // ConsumerFromConfig creates new ephemeral consumer from the configuration

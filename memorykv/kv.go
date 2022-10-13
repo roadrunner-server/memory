@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/roadrunner-server/api/v2/plugins/config"
 	"github.com/roadrunner-server/errors"
 	kvv1 "go.buf.build/protocolbuffers/go/roadrunner-server/api/proto/kv/v1"
 	"go.uber.org/zap"
@@ -20,7 +19,14 @@ type Driver struct {
 	cfg  *Config
 }
 
-func NewInMemoryDriver(key string, log *zap.Logger, cfgPlugin config.Configurer) (*Driver, error) {
+type Configurer interface {
+	// UnmarshalKey takes a single key and unmarshal it into a Struct.
+	UnmarshalKey(name string, out any) error
+	// Has checks if config section exists.
+	Has(name string) bool
+}
+
+func NewInMemoryDriver(key string, log *zap.Logger, cfgPlugin Configurer) (*Driver, error) {
 	const op = errors.Op("new_in_memory_driver")
 
 	d := &Driver{
