@@ -3,11 +3,9 @@ package memory
 import (
 	"github.com/roadrunner-server/memory/v3/memoryjobs"
 	"github.com/roadrunner-server/memory/v3/memorykv"
-	"github.com/roadrunner-server/memory/v3/memorypubsub"
 	"github.com/roadrunner-server/sdk/v3/plugins/jobs"
 	"github.com/roadrunner-server/sdk/v3/plugins/jobs/pipeline"
 	"github.com/roadrunner-server/sdk/v3/plugins/kv"
-	"github.com/roadrunner-server/sdk/v3/plugins/pubsub"
 	priorityqueue "github.com/roadrunner-server/sdk/v3/priority_queue"
 	"go.uber.org/zap"
 )
@@ -38,10 +36,6 @@ func (p *Plugin) Name() string {
 }
 
 // Drivers implementation
-
-func (p *Plugin) PubSubFromConfig(key string) (pubsub.PubSub, error) {
-	return memorypubsub.NewPubSubDriver(p.log, key)
-}
 
 func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
 	return memorykv.NewInMemoryDriver(key, p.log, p.cfg)
