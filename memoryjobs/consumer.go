@@ -2,6 +2,8 @@ package memoryjobs
 
 import (
 	"context"
+	"strconv"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -26,22 +28,28 @@ type Configurer interface {
 }
 
 type Config struct {
-	Priority int64  `mapstructure:"priority"`
-	Prefetch uint64 `mapstructure:"prefetch"`
+	Priority int64 `mapstructure:"priority"`
+	Prefetch int64 `mapstructure:"prefetch"`
 }
 
 type Consumer struct {
-	cfg           *Config
-	log           *zap.Logger
-	pipeline      atomic.Pointer[pipeline.Pipeline]
-	pq            priorityqueue.Queue
-	localPrefetch chan *Item
+	cfg *Config
+
+	// delayed messages
+	delayed *int64
+	// currently processing
+	msgInFlight *int64
+	// prefetch
+	msgInFlightLimit *int64
+	cond             sync.Cond
+
+	log        *zap.Logger
+	pipeline   atomic.Pointer[pipeline.Pipeline]
+	pq         priorityqueue.Queue
+	localQueue chan *Item
 
 	// time.sleep goroutines max number
 	goroutines uint64
-
-	delayed *int64
-	active  *int64
 
 	priority  int64
 	listeners uint32
@@ -52,12 +60,13 @@ func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq priorityqu
 	const op = errors.Op("new_ephemeral_pipeline")
 
 	jb := &Consumer{
-		log:        log,
-		pq:         pq,
-		goroutines: 0,
-		active:     utils.Int64(0),
-		delayed:    utils.Int64(0),
-		stopCh:     make(chan struct{}),
+		cond:        sync.Cond{L: &sync.Mutex{}},
+		log:         log,
+		pq:          pq,
+		goroutines:  0,
+		msgInFlight: utils.Int64(0),
+		delayed:     utils.Int64(0),
+		stopCh:      make(chan struct{}),
 	}
 
 	err := cfg.UnmarshalKey(configKey, &jb.cfg)
@@ -73,6 +82,8 @@ func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq priorityqu
 		jb.cfg.Prefetch = 100_000
 	}
 
+	jb.msgInFlightLimit = utils.Int64(jb.cfg.Prefetch)
+
 	if jb.cfg.Priority == 0 {
 		jb.cfg.Priority = 10
 	}
@@ -80,21 +91,28 @@ func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq priorityqu
 	jb.priority = jb.cfg.Priority
 
 	// initialize a local queue
-	jb.localPrefetch = make(chan *Item, jb.cfg.Prefetch)
+	jb.localQueue = make(chan *Item, 100_000)
 
 	return jb, nil
 }
 
 func FromPipeline(pipeline *pipeline.Pipeline, log *zap.Logger, pq priorityqueue.Queue) (*Consumer, error) {
+	pref, err := strconv.ParseInt(pipeline.String(prefetch, "100000"), 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
 	return &Consumer{
-		log:           log,
-		pq:            pq,
-		localPrefetch: make(chan *Item, pipeline.Int(prefetch, 100_000)),
-		goroutines:    0,
-		active:        utils.Int64(0),
-		delayed:       utils.Int64(0),
-		priority:      pipeline.Priority(),
-		stopCh:        make(chan struct{}),
+		log:              log,
+		pq:               pq,
+		cond:             sync.Cond{L: &sync.Mutex{}},
+		localQueue:       make(chan *Item, 100_000),
+		goroutines:       0,
+		msgInFlight:      utils.Int64(0),
+		msgInFlightLimit: utils.Int64(pref),
+		delayed:          utils.Int64(0),
+		priority:         pipeline.Priority(),
+		stopCh:           make(chan struct{}),
 	}, nil
 }
 
@@ -121,7 +139,7 @@ func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
 		Priority: uint64(pipe.Priority()),
 		Driver:   pipe.Driver(),
 		Queue:    pipe.Name(),
-		Active:   atomic.LoadInt64(c.active),
+		Active:   atomic.LoadInt64(c.msgInFlight),
 		Delayed:  atomic.LoadInt64(c.delayed),
 		Ready:    ready(atomic.LoadUint32(&c.listeners)),
 	}, nil
@@ -203,12 +221,14 @@ func (c *Consumer) Stop(_ context.Context) error {
 		break
 	}
 
-	for i := 0; i < len(c.localPrefetch); i++ {
-		// drain all jobs from the channel
-		<-c.localPrefetch
-	}
+	// just to be sure, that queue won't block
+	c.cond.Signal()
 
-	c.localPrefetch = nil
+	// close localQueue channel
+	close(c.localQueue)
+
+	// help GC
+	c.localQueue = nil
 
 	c.log.Debug("pipeline was stopped", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().String()), zap.String("elapsed", time.Since(start).String()))
 	return nil
@@ -229,11 +249,12 @@ func (c *Consumer) handleItem(ctx context.Context, msg *Item) error {
 			atomic.AddUint64(&c.goroutines, 1)
 			atomic.AddInt64(c.delayed, 1)
 
+			defer atomic.AddUint64(&c.goroutines, ^uint64(0))
+
 			time.Sleep(jj.Options.DelayDuration())
 
 			select {
-			case c.localPrefetch <- jj:
-				atomic.AddUint64(&c.goroutines, ^uint64(0))
+			case c.localQueue <- jj:
 			default:
 				c.log.Warn("can't push job", zap.String("error", "local queue closed or full"))
 			}
@@ -242,12 +263,9 @@ func (c *Consumer) handleItem(ctx context.Context, msg *Item) error {
 		return nil
 	}
 
-	// increase number of the active jobs
-	atomic.AddInt64(c.active, 1)
-
 	// insert to the local, limited pipeline
 	select {
-	case c.localPrefetch <- msg:
+	case c.localQueue <- msg:
 		return nil
 	case <-ctx.Done():
 		return errors.E(op, errors.Errorf("local pipeline is full, consider to increase prefetch number, current limit: %d, context error: %v", c.cfg.Prefetch, ctx.Err()))
@@ -259,10 +277,18 @@ func (c *Consumer) consume() {
 		// redirect
 		for {
 			select {
-			case item, ok := <-c.localPrefetch:
+			case item, ok := <-c.localQueue:
 				if !ok {
-					c.log.Debug("ephemeral local prefetch queue closed")
+					c.log.Debug("ephemeral local queue closed")
 					return
+				}
+
+				c.cond.L.Lock()
+
+				for atomic.LoadInt64(c.msgInFlight) >= atomic.LoadInt64(c.msgInFlightLimit) {
+					c.log.Debug("prefetch limit was reached, waiting for the jobs to be processed", zap.Int64("current", atomic.LoadInt64(c.msgInFlight)), zap.Int64("limit", atomic.LoadInt64(c.msgInFlightLimit)))
+					// wait for the jobs to be processed
+					c.cond.Wait()
 				}
 
 				if item.Priority() == 0 {
@@ -270,10 +296,18 @@ func (c *Consumer) consume() {
 				}
 				// set requeue channel
 				item.Options.requeueFn = c.handleItem
-				item.Options.active = c.active
+				item.Options.msgInFlight = c.msgInFlight
 				item.Options.delayed = c.delayed
+				item.Options.cond = &c.cond
 
 				c.pq.Insert(item)
+
+				// increase number of the active jobs
+				atomic.AddInt64(c.msgInFlight, 1)
+
+				c.log.Debug("message pushed to the priority queue", zap.Int64("current", atomic.LoadInt64(c.msgInFlight)), zap.Int64("limit", atomic.LoadInt64(c.msgInFlightLimit)))
+
+				c.cond.L.Unlock()
 			case <-c.stopCh:
 				return
 			}
