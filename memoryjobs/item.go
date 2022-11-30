@@ -2,6 +2,7 @@ package memoryjobs
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -40,9 +41,10 @@ type Options struct {
 	Delay int64 `json:"delay,omitempty"`
 
 	// private
-	requeueFn func(context.Context, *Item) error
-	active    *int64
-	delayed   *int64
+	requeueFn   func(context.Context, *Item) error
+	cond        *sync.Cond
+	msgInFlight *int64
+	delayed     *int64
 }
 
 // DelayDuration returns delay duration in a form of time.Duration.
@@ -82,11 +84,17 @@ func (i *Item) Context() ([]byte, error) {
 }
 
 func (i *Item) Ack() error {
+	// pass 1 job
+	defer i.Options.cond.Signal()
+
 	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Nack() error {
+	// pass 1 job
+	defer i.Options.cond.Signal()
+
 	i.atomicallyReduceCount()
 	return nil
 }
@@ -120,7 +128,7 @@ func (i *Item) atomicallyReduceCount() {
 	}
 
 	// otherwise, reduce number of the active jobs
-	atomic.AddInt64(i.Options.active, ^int64(0))
+	atomic.AddInt64(i.Options.msgInFlight, ^int64(0))
 	// noop for the in-memory
 }
 
