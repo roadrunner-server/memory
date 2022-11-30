@@ -84,17 +84,11 @@ func (i *Item) Context() ([]byte, error) {
 }
 
 func (i *Item) Ack() error {
-	// pass 1 job
-	defer i.Options.cond.Signal()
-
 	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Nack() error {
-	// pass 1 job
-	defer i.Options.cond.Signal()
-
 	i.atomicallyReduceCount()
 	return nil
 }
@@ -121,15 +115,14 @@ func (i *Item) Respond([]byte, string) error {
 
 // atomicallyReduceCount reduces counter of active or delayed jobs
 func (i *Item) atomicallyReduceCount() {
+	// reduce number of the all active jobs
+	atomic.AddInt64(i.Options.msgInFlight, ^int64(0))
+	// pass 1 job
+	i.Options.cond.Signal()
 	// if job was delayed, reduce number of the delayed jobs
 	if i.Options.Delay > 0 {
 		atomic.AddInt64(i.Options.delayed, ^int64(0))
-		return
 	}
-
-	// otherwise, reduce number of the active jobs
-	atomic.AddInt64(i.Options.msgInFlight, ^int64(0))
-	// noop for the in-memory
 }
 
 func fromJob(job *jobs.Job) *Item {
