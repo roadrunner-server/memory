@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/roadrunner-server/api/v3/plugins/v1/kv"
 	"github.com/roadrunner-server/errors"
-	kvv1 "go.buf.build/protocolbuffers/go/roadrunner-server/api/kv/v1"
 	"go.uber.org/zap"
 )
 
@@ -81,7 +81,7 @@ func (d *Driver) Get(key string) ([]byte, error) {
 	if data, exist := d.heap.Load(key); exist {
 		// here might be a panic
 		// but data only could be a string, see Set function
-		return data.(*kvv1.Item).Value, nil
+		return data.(kv.Item).Value(), nil
 	}
 	return nil, nil
 }
@@ -104,14 +104,14 @@ func (d *Driver) MGet(keys ...string) (map[string][]byte, error) {
 
 	for i := 0; i < len(keys); i++ {
 		if value, ok := d.heap.Load(keys[i]); ok {
-			m[keys[i]] = value.(*kvv1.Item).Value
+			m[keys[i]] = value.(kv.Item).Value()
 		}
 	}
 
 	return m, nil
 }
 
-func (d *Driver) Set(items ...*kvv1.Item) error {
+func (d *Driver) Set(items ...kv.Item) error {
 	const op = errors.Op("in_memory_plugin_set")
 	if items == nil {
 		return errors.E(op, errors.NoKeys)
@@ -122,45 +122,45 @@ func (d *Driver) Set(items ...*kvv1.Item) error {
 			continue
 		}
 		// TTL is set
-		if items[i].Timeout != "" {
+		if items[i].Timeout() != "" {
 			// check the TTL in the item
-			_, err := time.Parse(time.RFC3339, items[i].Timeout)
+			_, err := time.Parse(time.RFC3339, items[i].Timeout())
 			if err != nil {
 				return err
 			}
 		}
 
-		d.heap.Store(items[i].Key, items[i])
+		d.heap.Store(items[i].Key(), items[i])
 	}
 	return nil
 }
 
 // MExpire sets the expiration time to the key
 // If key already has the expiration time, it will be overwritten
-func (d *Driver) MExpire(items ...*kvv1.Item) error {
+func (d *Driver) MExpire(items ...kv.Item) error {
 	const op = errors.Op("in_memory_plugin_mexpire")
 	for i := range items {
 		if items[i] == nil {
 			continue
 		}
-		if items[i].Timeout == "" || strings.TrimSpace(items[i].Key) == "" {
+		if items[i].Timeout() == "" || strings.TrimSpace(items[i].Key()) == "" {
 			return errors.E(op, errors.Str("should set timeout and at least one key"))
 		}
 
 		// if key exist, overwrite it value
-		if pItem, ok := d.heap.LoadAndDelete(items[i].Key); ok {
+		if pItem, ok := d.heap.LoadAndDelete(items[i].Key()); ok {
 			// check that time is correct
-			_, err := time.Parse(time.RFC3339, items[i].Timeout)
+			_, err := time.Parse(time.RFC3339, items[i].Timeout())
 			if err != nil {
 				return errors.E(op, err)
 			}
 			// guess that t is in the future
 			// in memory is just FOR TESTING PURPOSES
 			// LOGIC ISN'T IDEAL
-			d.heap.Store(items[i].Key, &kvv1.Item{
-				Key:     items[i].Key,
-				Value:   pItem.(*kvv1.Item).Value,
-				Timeout: items[i].Timeout,
+			d.heap.Store(items[i].Key(), &Item{
+				key:     items[i].Key(),
+				value:   pItem.(kv.Item).Value(),
+				timeout: items[i].Timeout(),
 			})
 		}
 	}
@@ -186,7 +186,7 @@ func (d *Driver) TTL(keys ...string) (map[string]string, error) {
 
 	for i := range keys {
 		if item, ok := d.heap.Load(keys[i]); ok {
-			m[keys[i]] = item.(*kvv1.Item).Timeout
+			m[keys[i]] = item.(kv.Item).Timeout()
 		}
 	}
 	return m, nil
@@ -239,12 +239,12 @@ func (d *Driver) gc() {
 
 			// check every second
 			d.heap.Range(func(key, value interface{}) bool {
-				v := value.(*kvv1.Item)
-				if v.Timeout == "" {
+				v := value.(kv.Item)
+				if v.Timeout() == "" {
 					return true
 				}
 
-				t, err := time.Parse(time.RFC3339, v.Timeout)
+				t, err := time.Parse(time.RFC3339, v.Timeout())
 				if err != nil {
 					return false
 				}

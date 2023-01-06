@@ -7,10 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/roadrunner-server/api/v3/plugins/v1/jobs"
+	pq "github.com/roadrunner-server/api/v3/plugins/v1/priority_queue"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/sdk/v3/plugins/jobs"
-	"github.com/roadrunner-server/sdk/v3/plugins/jobs/pipeline"
-	priorityqueue "github.com/roadrunner-server/sdk/v3/priority_queue"
 	"github.com/roadrunner-server/sdk/v3/utils"
 	"go.uber.org/zap"
 )
@@ -44,8 +43,8 @@ type Consumer struct {
 	cond             sync.Cond
 
 	log        *zap.Logger
-	pipeline   atomic.Pointer[pipeline.Pipeline]
-	pq         priorityqueue.Queue
+	pipeline   atomic.Pointer[jobs.Pipeline]
+	pq         pq.Queue
 	localQueue chan *Item
 
 	// time.sleep goroutines max number
@@ -56,7 +55,7 @@ type Consumer struct {
 	stopCh    chan struct{}
 }
 
-func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq priorityqueue.Queue) (*Consumer, error) {
+func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq pq.Queue) (*Consumer, error) {
 	const op = errors.Op("new_ephemeral_pipeline")
 
 	jb := &Consumer{
@@ -96,7 +95,7 @@ func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq priorityqu
 	return jb, nil
 }
 
-func FromPipeline(pipeline *pipeline.Pipeline, log *zap.Logger, pq priorityqueue.Queue) (*Consumer, error) {
+func FromPipeline(pipeline jobs.Pipeline, log *zap.Logger, pq pq.Queue) (*Consumer, error) {
 	pref, err := strconv.ParseInt(pipeline.String(prefetch, "100000"), 10, 64)
 	if err != nil {
 		return nil, err
@@ -116,12 +115,12 @@ func FromPipeline(pipeline *pipeline.Pipeline, log *zap.Logger, pq priorityqueue
 	}, nil
 }
 
-func (c *Consumer) Push(ctx context.Context, jb *jobs.Job) error {
+func (c *Consumer) Push(ctx context.Context, jb jobs.Job) error {
 	const op = errors.Op("ephemeral_push")
 	// check if the pipeline registered
-	pipe := c.pipeline.Load()
+	pipe := *c.pipeline.Load()
 	if pipe == nil {
-		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.Options.Pipeline))
+		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.Pipeline()))
 	}
 
 	err := c.handleItem(ctx, fromJob(jb))
@@ -133,7 +132,7 @@ func (c *Consumer) Push(ctx context.Context, jb *jobs.Job) error {
 }
 
 func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
-	pipe := c.pipeline.Load()
+	pipe := *c.pipeline.Load()
 	return &jobs.State{
 		Pipeline: pipe.Name(),
 		Priority: uint64(pipe.Priority()),
@@ -145,12 +144,12 @@ func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
 	}, nil
 }
 
-func (c *Consumer) Register(_ context.Context, pipeline *pipeline.Pipeline) error {
-	c.pipeline.Store(pipeline)
+func (c *Consumer) Register(_ context.Context, p jobs.Pipeline) error {
+	c.pipeline.Store(&p)
 	return nil
 }
 
-func (c *Consumer) Run(_ context.Context, pipe *pipeline.Pipeline) error {
+func (c *Consumer) Run(_ context.Context, pipe jobs.Pipeline) error {
 	const op = errors.Op("memory_jobs_run")
 	t := time.Now()
 
@@ -170,7 +169,7 @@ func (c *Consumer) Run(_ context.Context, pipe *pipeline.Pipeline) error {
 
 func (c *Consumer) Pause(_ context.Context, p string) {
 	start := time.Now()
-	pipe := c.pipeline.Load()
+	pipe := *c.pipeline.Load()
 	if pipe.Name() != p {
 		c.log.Error("no such pipeline", zap.String("pause was requested: ", p))
 	}
@@ -192,7 +191,7 @@ func (c *Consumer) Pause(_ context.Context, p string) {
 
 func (c *Consumer) Resume(_ context.Context, p string) {
 	start := time.Now()
-	pipe := c.pipeline.Load()
+	pipe := *c.pipeline.Load()
 	if pipe.Name() != p {
 		c.log.Error("no such pipeline", zap.String("resume was requested: ", p))
 	}
@@ -213,7 +212,7 @@ func (c *Consumer) Resume(_ context.Context, p string) {
 
 func (c *Consumer) Stop(_ context.Context) error {
 	start := time.Now()
-	pipe := c.pipeline.Load()
+	pipe := *c.pipeline.Load()
 
 	select {
 	case c.stopCh <- struct{}{}:
