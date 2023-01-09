@@ -8,7 +8,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/roadrunner-server/api/v3/plugins/v1/jobs"
-	"github.com/roadrunner-server/sdk/v3/utils"
+	"github.com/roadrunner-server/sdk/v4/utils"
 )
 
 type Item struct {
