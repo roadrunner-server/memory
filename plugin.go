@@ -43,12 +43,12 @@ func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
 	return memorykv.NewInMemoryDriver(key, p.log, p.cfg)
 }
 
-// ConsumerFromConfig creates new ephemeral consumer from the configuration
-func (p *Plugin) ConsumerFromConfig(configKey string, pq pq.Queue) (jobs.Consumer, error) {
-	return memoryjobs.FromConfig(configKey, p.log, p.cfg, pq)
+// DriverFromConfig constructs memory driver from the .rr.yaml configuration
+func (p *Plugin) DriverFromConfig(configKey string, pq pq.Queue, pipeline jobs.Pipeline, cmder chan<- jobs.Commander) (jobs.Driver, error) {
+	return memoryjobs.FromConfig(configKey, p.log, p.cfg, pipeline, pq, cmder)
 }
 
-// ConsumerFromPipeline creates new ephemeral consumer from the provided pipeline
-func (p *Plugin) ConsumerFromPipeline(pipeline jobs.Pipeline, pq pq.Queue) (jobs.Consumer, error) {
-	return memoryjobs.FromPipeline(pipeline, p.log, pq)
+// DriverFromPipeline constructs memory driver from pipeline
+func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq pq.Queue, cmder chan<- jobs.Commander) (jobs.Driver, error) {
+	return memoryjobs.FromPipeline(pipe, p.log, p.cfg, pq, cmder)
 }
