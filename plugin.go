@@ -1,9 +1,9 @@
 package memory
 
 import (
-	"github.com/roadrunner-server/api/v3/plugins/v1/jobs"
-	"github.com/roadrunner-server/api/v3/plugins/v1/kv"
-	pq "github.com/roadrunner-server/api/v3/plugins/v1/priority_queue"
+	"github.com/roadrunner-server/api/v4/plugins/v1/jobs"
+	"github.com/roadrunner-server/api/v4/plugins/v1/kv"
+	pq "github.com/roadrunner-server/api/v4/plugins/v1/priority_queue"
 	"github.com/roadrunner-server/memory/v4/memoryjobs"
 	"github.com/roadrunner-server/memory/v4/memorykv"
 	"go.uber.org/zap"
