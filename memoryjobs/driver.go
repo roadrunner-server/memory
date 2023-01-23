@@ -59,7 +59,7 @@ type Driver struct {
 
 // FromConfig initializes kafka pipeline from the configuration
 func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pipeline jobs.Pipeline, pq pq.Queue, _ chan<- jobs.Commander) (*Driver, error) {
-	const op = errors.Op("new_ephemeral_pipeline")
+	const op = errors.Op("new_in_memory_pipeline")
 
 	jb := &Driver{
 		cond:        sync.Cond{L: &sync.Mutex{}},
@@ -125,7 +125,7 @@ func FromPipeline(pipeline jobs.Pipeline, log *zap.Logger, _ Configurer, pq pq.Q
 }
 
 func (c *Driver) Push(ctx context.Context, jb jobs.Job) error {
-	const op = errors.Op("ephemeral_push")
+	const op = errors.Op("in_memory_push")
 	// check if the pipeline registered
 	pipe := *c.pipeline.Load()
 	if pipe == nil {
@@ -154,7 +154,7 @@ func (c *Driver) State(_ context.Context) (*jobs.State, error) {
 }
 
 func (c *Driver) Run(_ context.Context, pipe jobs.Pipeline) error {
-	const op = errors.Op("memory_jobs_run")
+	const op = errors.Op("in_memory_jobs_run")
 	t := time.Now()
 
 	l := atomic.LoadUint32(&c.listeners)
@@ -239,7 +239,7 @@ func (c *Driver) Stop(_ context.Context) error {
 }
 
 func (c *Driver) handleItem(ctx context.Context, msg *Item) error {
-	const op = errors.Op("ephemeral_handle_request")
+	const op = errors.Op("in_memory_handle_request")
 	// handle timeouts
 	// theoretically, some bad user may send millions requests with a delay and produce a billion (for example)
 	// goroutines here. We should limit goroutines here.
