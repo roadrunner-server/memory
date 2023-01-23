@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api/v3/plugins/v1/jobs"
-	pq "github.com/roadrunner-server/api/v3/plugins/v1/priority_queue"
+	"github.com/roadrunner-server/api/v4/plugins/v1/jobs"
+	pq "github.com/roadrunner-server/api/v4/plugins/v1/priority_queue"
 	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/sdk/v4/utils"
 	"go.uber.org/zap"
@@ -18,6 +18,8 @@ const (
 	prefetch      string = "prefetch"
 	goroutinesMax uint64 = 1000
 )
+
+var _ jobs.Driver = (*Driver)(nil)
 
 type Configurer interface {
 	// UnmarshalKey takes a single key and unmarshal it into a Struct.
@@ -31,7 +33,7 @@ type Config struct {
 	Prefetch int64 `mapstructure:"prefetch"`
 }
 
-type Consumer struct {
+type Driver struct {
 	cfg *Config
 
 	// delayed messages
@@ -55,10 +57,11 @@ type Consumer struct {
 	stopCh    chan struct{}
 }
 
-func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq pq.Queue) (*Consumer, error) {
-	const op = errors.Op("new_ephemeral_pipeline")
+// FromConfig initializes kafka pipeline from the configuration
+func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pipeline jobs.Pipeline, pq pq.Queue, _ chan<- jobs.Commander) (*Driver, error) {
+	const op = errors.Op("new_in_memory_pipeline")
 
-	jb := &Consumer{
+	jb := &Driver{
 		cond:        sync.Cond{L: &sync.Mutex{}},
 		log:         log,
 		pq:          pq,
@@ -88,6 +91,7 @@ func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq pq.Queue) 
 	}
 
 	jb.priority = jb.cfg.Priority
+	jb.pipeline.Store(&pipeline)
 
 	// initialize a local queue
 	jb.localQueue = make(chan *Item, 100_000)
@@ -95,13 +99,14 @@ func FromConfig(configKey string, log *zap.Logger, cfg Configurer, pq pq.Queue) 
 	return jb, nil
 }
 
-func FromPipeline(pipeline jobs.Pipeline, log *zap.Logger, pq pq.Queue) (*Consumer, error) {
+// FromPipeline initializes pipeline on-the-fly
+func FromPipeline(pipeline jobs.Pipeline, log *zap.Logger, _ Configurer, pq pq.Queue, _ chan<- jobs.Commander) (*Driver, error) {
 	pref, err := strconv.ParseInt(pipeline.String(prefetch, "100000"), 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Consumer{
+	dr := &Driver{
 		log:              log,
 		pq:               pq,
 		cond:             sync.Cond{L: &sync.Mutex{}},
@@ -112,11 +117,15 @@ func FromPipeline(pipeline jobs.Pipeline, log *zap.Logger, pq pq.Queue) (*Consum
 		delayed:          utils.Int64(0),
 		priority:         pipeline.Priority(),
 		stopCh:           make(chan struct{}),
-	}, nil
+	}
+
+	dr.pipeline.Store(&pipeline)
+
+	return dr, nil
 }
 
-func (c *Consumer) Push(ctx context.Context, jb jobs.Job) error {
-	const op = errors.Op("ephemeral_push")
+func (c *Driver) Push(ctx context.Context, jb jobs.Job) error {
+	const op = errors.Op("in_memory_push")
 	// check if the pipeline registered
 	pipe := *c.pipeline.Load()
 	if pipe == nil {
@@ -131,7 +140,7 @@ func (c *Consumer) Push(ctx context.Context, jb jobs.Job) error {
 	return nil
 }
 
-func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
+func (c *Driver) State(_ context.Context) (*jobs.State, error) {
 	pipe := *c.pipeline.Load()
 	return &jobs.State{
 		Pipeline: pipe.Name(),
@@ -144,13 +153,8 @@ func (c *Consumer) State(_ context.Context) (*jobs.State, error) {
 	}, nil
 }
 
-func (c *Consumer) Register(_ context.Context, p jobs.Pipeline) error {
-	c.pipeline.Store(&p)
-	return nil
-}
-
-func (c *Consumer) Run(_ context.Context, pipe jobs.Pipeline) error {
-	const op = errors.Op("memory_jobs_run")
+func (c *Driver) Run(_ context.Context, pipe jobs.Pipeline) error {
+	const op = errors.Op("in_memory_jobs_run")
 	t := time.Now()
 
 	l := atomic.LoadUint32(&c.listeners)
@@ -167,50 +171,51 @@ func (c *Consumer) Run(_ context.Context, pipe jobs.Pipeline) error {
 	return nil
 }
 
-func (c *Consumer) Pause(_ context.Context, p string) {
+func (c *Driver) Pause(_ context.Context, p string) error {
 	start := time.Now()
 	pipe := *c.pipeline.Load()
 	if pipe.Name() != p {
-		c.log.Error("no such pipeline", zap.String("pause was requested: ", p))
+		return errors.Errorf("no such pipeline: %s", pipe.Name())
 	}
 
 	l := atomic.LoadUint32(&c.listeners)
 	// no active listeners
 	if l == 0 {
-		c.log.Warn("no active listeners, nothing to pause")
-		return
+		return errors.Str("no active listeners, nothing to pause")
 	}
 
 	atomic.AddUint32(&c.listeners, ^uint32(0))
 
-	// stop the Consumer
+	// stop the Driver
 	c.stopCh <- struct{}{}
-
 	c.log.Debug("pipeline was paused", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().String()), zap.String("elapsed", time.Since(start).String()))
+
+	return nil
 }
 
-func (c *Consumer) Resume(_ context.Context, p string) {
+func (c *Driver) Resume(_ context.Context, p string) error {
 	start := time.Now()
 	pipe := *c.pipeline.Load()
 	if pipe.Name() != p {
-		c.log.Error("no such pipeline", zap.String("resume was requested: ", p))
+		return errors.Errorf("no such pipeline: %s", pipe.Name())
 	}
 
 	l := atomic.LoadUint32(&c.listeners)
 	// listener already active
 	if l == 1 {
-		c.log.Warn("listener already in the active state")
-		return
+		return errors.Str("memory listener is already in the active state")
 	}
 
-	// resume the Consumer on the same channel
+	// resume the Driver on the same channel
 	c.consume()
 
 	atomic.StoreUint32(&c.listeners, 1)
 	c.log.Debug("pipeline was resumed", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().String()), zap.String("elapsed", time.Since(start).String()))
+
+	return nil
 }
 
-func (c *Consumer) Stop(_ context.Context) error {
+func (c *Driver) Stop(_ context.Context) error {
 	start := time.Now()
 	pipe := *c.pipeline.Load()
 
@@ -233,8 +238,8 @@ func (c *Consumer) Stop(_ context.Context) error {
 	return nil
 }
 
-func (c *Consumer) handleItem(ctx context.Context, msg *Item) error {
-	const op = errors.Op("ephemeral_handle_request")
+func (c *Driver) handleItem(ctx context.Context, msg *Item) error {
+	const op = errors.Op("in_memory_handle_request")
 	// handle timeouts
 	// theoretically, some bad user may send millions requests with a delay and produce a billion (for example)
 	// goroutines here. We should limit goroutines here.
@@ -271,7 +276,7 @@ func (c *Consumer) handleItem(ctx context.Context, msg *Item) error {
 	}
 }
 
-func (c *Consumer) consume() {
+func (c *Driver) consume() {
 	go func() {
 		// redirect
 		for {
