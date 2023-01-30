@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	pluginName    string = "memory"
 	prefetch      string = "prefetch"
 	goroutinesMax uint64 = 1000
 )
