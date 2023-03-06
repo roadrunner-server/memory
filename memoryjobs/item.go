@@ -90,6 +90,10 @@ func (i *Item) Context() ([]byte, error) {
 	return ctx, nil
 }
 
+func (i *Item) Metadata() map[string][]string {
+	return i.Headers
+}
+
 func (i *Item) Ack() error {
 	i.atomicallyReduceCount()
 	return nil
