@@ -182,7 +182,7 @@ func (c *Driver) Push(ctx context.Context, jb jobs.Job) error {
 }
 
 func (c *Driver) State(ctx context.Context) (*jobs.State, error) {
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_state")
+	_, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_state")
 	defer span.End()
 
 	pipe := *c.pipeline.Load()
@@ -199,7 +199,7 @@ func (c *Driver) State(ctx context.Context) (*jobs.State, error) {
 
 func (c *Driver) Run(ctx context.Context, pipe jobs.Pipeline) error {
 	const op = errors.Op("in_memory_jobs_run")
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_run")
+	_, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_run")
 	defer span.End()
 
 	t := time.Now().UTC()
@@ -220,7 +220,7 @@ func (c *Driver) Run(ctx context.Context, pipe jobs.Pipeline) error {
 
 func (c *Driver) Pause(ctx context.Context, p string) error {
 	start := time.Now().UTC()
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_pause")
+	_, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_pause")
 	defer span.End()
 
 	pipe := *c.pipeline.Load()
@@ -245,7 +245,7 @@ func (c *Driver) Pause(ctx context.Context, p string) error {
 
 func (c *Driver) Resume(ctx context.Context, p string) error {
 	start := time.Now().UTC()
-	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_resume")
+	_, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_resume")
 	defer span.End()
 	pipe := *c.pipeline.Load()
 	if pipe.Name() != p {
