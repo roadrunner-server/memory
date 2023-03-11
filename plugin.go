@@ -4,20 +4,27 @@ import (
 	"github.com/roadrunner-server/api/v4/plugins/v1/jobs"
 	"github.com/roadrunner-server/api/v4/plugins/v1/kv"
 	pq "github.com/roadrunner-server/api/v4/plugins/v1/priority_queue"
+	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/memory/v4/memoryjobs"
 	"github.com/roadrunner-server/memory/v4/memorykv"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
 )
 
 const PluginName string = "memory"
 
 type Plugin struct {
-	log *zap.Logger
-	cfg Configurer
+	log    *zap.Logger
+	cfg    Configurer
+	tracer *sdktrace.TracerProvider
 }
 
 type Logger interface {
 	NamedLogger(name string) *zap.Logger
+}
+
+type Tracer interface {
+	Tracer() *sdktrace.TracerProvider
 }
 
 type Configurer interface {
@@ -37,6 +44,14 @@ func (p *Plugin) Name() string {
 	return PluginName
 }
 
+func (p *Plugin) Collects() []*dep.In {
+	return []*dep.In{
+		dep.Fits(func(pp any) {
+			p.tracer = pp.(Tracer).Tracer()
+		}, (*Tracer)(nil)),
+	}
+}
+
 // Drivers implementation
 
 func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
@@ -44,11 +59,11 @@ func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
 }
 
 // DriverFromConfig constructs memory driver from the .rr.yaml configuration
-func (p *Plugin) DriverFromConfig(configKey string, pq pq.Queue, pipeline jobs.Pipeline, cmder chan<- jobs.Commander) (jobs.Driver, error) {
-	return memoryjobs.FromConfig(configKey, p.log, p.cfg, pipeline, pq, cmder)
+func (p *Plugin) DriverFromConfig(configKey string, pq pq.Queue, pipeline jobs.Pipeline, _ chan<- jobs.Commander) (jobs.Driver, error) {
+	return memoryjobs.FromConfig(p.tracer, configKey, p.log, p.cfg, pipeline, pq)
 }
 
 // DriverFromPipeline constructs memory driver from pipeline
-func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq pq.Queue, cmder chan<- jobs.Commander) (jobs.Driver, error) {
-	return memoryjobs.FromPipeline(pipe, p.log, p.cfg, pq, cmder)
+func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq pq.Queue, _ chan<- jobs.Commander) (jobs.Driver, error) {
+	return memoryjobs.FromPipeline(p.tracer, pipe, p.log, pq)
 }
