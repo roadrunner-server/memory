@@ -272,6 +272,7 @@ func (c *Driver) Stop(ctx context.Context) error {
 	defer span.End()
 
 	pipe := *c.pipeline.Load()
+	_ = c.pq.Remove(pipe.Name())
 
 	select {
 	case c.stopCh <- struct{}{}:
