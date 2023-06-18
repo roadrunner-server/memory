@@ -8,6 +8,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
+	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/sdk/v4/utils"
 )
 
@@ -41,6 +42,7 @@ type Options struct {
 	Delay int64 `json:"delay,omitempty"`
 
 	// private
+	stopped     *uint64
 	requeueFn   func(context.Context, *Item) error
 	cond        *sync.Cond
 	msgInFlight *int64
@@ -99,16 +101,25 @@ func (i *Item) Headers() map[string][]string {
 }
 
 func (i *Item) Ack() error {
+	if atomic.LoadUint64(i.Options.stopped) == 1 {
+		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
+	}
 	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Nack() error {
+	if atomic.LoadUint64(i.Options.stopped) == 1 {
+		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
+	}
 	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Requeue(headers map[string][]string, delay int64) error {
+	if atomic.LoadUint64(i.Options.stopped) == 1 {
+		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
+	}
 	// overwrite the delay
 	i.Options.Delay = delay
 	i.headers = headers

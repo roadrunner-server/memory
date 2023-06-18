@@ -65,6 +65,7 @@ type Driver struct {
 
 	priority  int64
 	listeners uint32
+	stopped   uint64
 	stopCh    chan struct{}
 }
 
@@ -83,6 +84,7 @@ func FromConfig(
 	}
 
 	jb := &Driver{
+		stopped:     0,
 		tracer:      tracer,
 		cond:        sync.Cond{L: &sync.Mutex{}},
 		log:         log,
@@ -140,6 +142,7 @@ func FromPipeline(
 	}
 
 	dr := &Driver{
+		stopped:          0,
 		tracer:           tracer,
 		log:              log,
 		pq:               pq,
@@ -288,6 +291,7 @@ func (c *Driver) Stop(ctx context.Context) error {
 
 	// help GC
 	c.localQueue = nil
+	atomic.StoreUint64(&c.stopped, 1)
 
 	c.log.Debug("pipeline was stopped", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
 	return nil
@@ -365,6 +369,11 @@ func (c *Driver) consume() {
 				item.Options.msgInFlight = c.msgInFlight
 				item.Options.delayed = c.delayed
 				item.Options.cond = &c.cond
+				item.Options.stopped = &c.stopped
+
+				if item.headers == nil {
+					item.headers = make(map[string][]string, 1)
+				}
 
 				// inject OTEL headers
 				c.prop.Inject(ctx, propagation.HeaderCarrier(item.headers))
