@@ -15,16 +15,12 @@ import (
 type Item struct {
 	// Job contains name of job broker (usually PHP class).
 	Job string `json:"job"`
-
 	// Ident is unique identifier of the job, should be provided from outside
 	Ident string `json:"id"`
-
 	// Payload is string data (usually JSON) passed to Job broker.
 	Payload string `json:"payload"`
-
 	// Headers with key-values pairs
 	headers map[string][]string
-
 	// Options contains set of PipelineOptions specific to job execution. Can be empty.
 	Options *Options `json:"options,omitempty"`
 }
@@ -58,7 +54,7 @@ func (i *Item) ID() string {
 	return i.Ident
 }
 
-func (i *Item) PipelineID() string {
+func (i *Item) GroupID() string {
 	return i.Options.Pipeline
 }
 
@@ -159,7 +155,7 @@ func fromJob(job jobs.Message) *Item {
 		headers: job.Headers(),
 		Options: &Options{
 			Priority: job.Priority(),
-			Pipeline: job.PipelineID(),
+			Pipeline: job.GroupID(),
 			Delay:    job.Delay(),
 		},
 	}

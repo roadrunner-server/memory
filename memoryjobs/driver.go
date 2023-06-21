@@ -172,7 +172,7 @@ func (c *Driver) Push(ctx context.Context, jb jobs.Message) error {
 	// check if the pipeline registered
 	pipe := *c.pipeline.Load()
 	if pipe == nil {
-		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.PipelineID()))
+		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.GroupID()))
 	}
 
 	err := c.handleItem(ctx, fromJob(jb))
