@@ -1,9 +1,8 @@
 package memory
 
 import (
-	"github.com/roadrunner-server/api/v4/plugins/v1/jobs"
 	"github.com/roadrunner-server/api/v4/plugins/v1/kv"
-	pq "github.com/roadrunner-server/api/v4/plugins/v1/priority_queue"
+	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
 	"github.com/roadrunner-server/endure/v2/dep"
 	"github.com/roadrunner-server/memory/v4/memoryjobs"
 	"github.com/roadrunner-server/memory/v4/memorykv"
@@ -59,11 +58,11 @@ func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
 }
 
 // DriverFromConfig constructs memory driver from the .rr.yaml configuration
-func (p *Plugin) DriverFromConfig(configKey string, pq pq.Queue, pipeline jobs.Pipeline, _ chan<- jobs.Commander) (jobs.Driver, error) {
+func (p *Plugin) DriverFromConfig(configKey string, pq jobs.Queue, pipeline jobs.Pipeline, _ chan<- jobs.Commander) (jobs.Driver, error) {
 	return memoryjobs.FromConfig(p.tracer, configKey, p.log, p.cfg, pipeline, pq)
 }
 
 // DriverFromPipeline constructs memory driver from pipeline
-func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq pq.Queue, _ chan<- jobs.Commander) (jobs.Driver, error) {
+func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq jobs.Queue, _ chan<- jobs.Commander) (jobs.Driver, error) {
 	return memoryjobs.FromPipeline(p.tracer, pipe, p.log, pq)
 }

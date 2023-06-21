@@ -7,8 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api/v4/plugins/v1/jobs"
-	pq "github.com/roadrunner-server/api/v4/plugins/v1/priority_queue"
+	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
 	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/sdk/v4/utils"
 	jprop "go.opentelemetry.io/contrib/propagators/jaeger"
@@ -56,7 +55,7 @@ type Driver struct {
 	tracer     *sdktrace.TracerProvider
 	log        *zap.Logger
 	pipeline   atomic.Pointer[jobs.Pipeline]
-	pq         pq.Queue
+	pq         jobs.Queue
 	localQueue chan *Item
 
 	prop propagation.TextMapPropagator
@@ -66,6 +65,7 @@ type Driver struct {
 
 	priority  int64
 	listeners uint32
+	stopped   uint64
 	stopCh    chan struct{}
 }
 
@@ -76,7 +76,7 @@ func FromConfig(
 	log *zap.Logger,
 	cfg Configurer,
 	pipeline jobs.Pipeline,
-	pq pq.Queue) (*Driver, error) {
+	pq jobs.Queue) (*Driver, error) {
 	const op = errors.Op("new_in_memory_pipeline")
 
 	if tracer == nil {
@@ -84,6 +84,7 @@ func FromConfig(
 	}
 
 	jb := &Driver{
+		stopped:     0,
 		tracer:      tracer,
 		cond:        sync.Cond{L: &sync.Mutex{}},
 		log:         log,
@@ -129,7 +130,7 @@ func FromPipeline(
 	tracer *sdktrace.TracerProvider,
 	pipeline jobs.Pipeline,
 	log *zap.Logger,
-	pq pq.Queue,
+	pq jobs.Queue,
 ) (*Driver, error) {
 	pref, err := strconv.ParseInt(pipeline.String(prefetch, "100000"), 10, 64)
 	if err != nil {
@@ -141,6 +142,7 @@ func FromPipeline(
 	}
 
 	dr := &Driver{
+		stopped:          0,
 		tracer:           tracer,
 		log:              log,
 		pq:               pq,
@@ -161,7 +163,7 @@ func FromPipeline(
 	return dr, nil
 }
 
-func (c *Driver) Push(ctx context.Context, jb jobs.Job) error {
+func (c *Driver) Push(ctx context.Context, jb jobs.Message) error {
 	const op = errors.Op("in_memory_push")
 
 	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_push")
@@ -170,7 +172,7 @@ func (c *Driver) Push(ctx context.Context, jb jobs.Job) error {
 	// check if the pipeline registered
 	pipe := *c.pipeline.Load()
 	if pipe == nil {
-		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.Pipeline()))
+		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.GroupID()))
 	}
 
 	err := c.handleItem(ctx, fromJob(jb))
@@ -273,6 +275,7 @@ func (c *Driver) Stop(ctx context.Context) error {
 	defer span.End()
 
 	pipe := *c.pipeline.Load()
+	_ = c.pq.Remove(pipe.Name())
 
 	select {
 	case c.stopCh <- struct{}{}:
@@ -288,6 +291,7 @@ func (c *Driver) Stop(ctx context.Context) error {
 
 	// help GC
 	c.localQueue = nil
+	atomic.StoreUint64(&c.stopped, 1)
 
 	c.log.Debug("pipeline was stopped", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
 	return nil
@@ -296,7 +300,7 @@ func (c *Driver) Stop(ctx context.Context) error {
 func (c *Driver) handleItem(ctx context.Context, msg *Item) error {
 	const op = errors.Op("in_memory_handle_request")
 
-	c.prop.Inject(ctx, propagation.HeaderCarrier(msg.Headers))
+	c.prop.Inject(ctx, propagation.HeaderCarrier(msg.headers))
 
 	// handle timeouts
 	// theoretically, some bad user may send millions requests with a delay and produce a billion (for example)
@@ -345,7 +349,7 @@ func (c *Driver) consume() {
 					return
 				}
 
-				ctx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.HeaderCarrier(item.Headers))
+				ctx := otel.GetTextMapPropagator().Extract(context.Background(), propagation.HeaderCarrier(item.headers))
 				ctx, span := c.tracer.Tracer(tracerName).Start(ctx, "in_memory_listener")
 
 				c.cond.L.Lock()
@@ -365,9 +369,14 @@ func (c *Driver) consume() {
 				item.Options.msgInFlight = c.msgInFlight
 				item.Options.delayed = c.delayed
 				item.Options.cond = &c.cond
+				item.Options.stopped = &c.stopped
+
+				if item.headers == nil {
+					item.headers = make(map[string][]string, 1)
+				}
 
 				// inject OTEL headers
-				c.prop.Inject(ctx, propagation.HeaderCarrier(item.Headers))
+				c.prop.Inject(ctx, propagation.HeaderCarrier(item.headers))
 				c.pq.Insert(item)
 
 				// increase number of the active jobs

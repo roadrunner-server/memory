@@ -7,23 +7,20 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/roadrunner-server/api/v4/plugins/v1/jobs"
+	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
+	"github.com/roadrunner-server/errors"
 	"github.com/roadrunner-server/sdk/v4/utils"
 )
 
 type Item struct {
 	// Job contains name of job broker (usually PHP class).
 	Job string `json:"job"`
-
 	// Ident is unique identifier of the job, should be provided from outside
 	Ident string `json:"id"`
-
 	// Payload is string data (usually JSON) passed to Job broker.
 	Payload string `json:"payload"`
-
 	// Headers with key-values pairs
-	Headers map[string][]string `json:"headers"`
-
+	headers map[string][]string
 	// Options contains set of PipelineOptions specific to job execution. Can be empty.
 	Options *Options `json:"options,omitempty"`
 }
@@ -41,6 +38,7 @@ type Options struct {
 	Delay int64 `json:"delay,omitempty"`
 
 	// private
+	stopped     *uint64
 	requeueFn   func(context.Context, *Item) error
 	cond        *sync.Cond
 	msgInFlight *int64
@@ -54,6 +52,10 @@ func (o *Options) DelayDuration() time.Duration {
 
 func (i *Item) ID() string {
 	return i.Ident
+}
+
+func (i *Item) GroupID() string {
+	return i.Options.Pipeline
 }
 
 func (i *Item) Priority() int64 {
@@ -78,7 +80,7 @@ func (i *Item) Context() ([]byte, error) {
 			ID:       i.Ident,
 			Job:      i.Job,
 			Driver:   pluginName,
-			Headers:  i.Headers,
+			Headers:  i.headers,
 			Pipeline: i.Options.Pipeline,
 		},
 	)
@@ -90,24 +92,33 @@ func (i *Item) Context() ([]byte, error) {
 	return ctx, nil
 }
 
-func (i *Item) Metadata() map[string][]string {
-	return i.Headers
+func (i *Item) Headers() map[string][]string {
+	return i.headers
 }
 
 func (i *Item) Ack() error {
+	if atomic.LoadUint64(i.Options.stopped) == 1 {
+		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
+	}
 	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Nack() error {
+	if atomic.LoadUint64(i.Options.stopped) == 1 {
+		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
+	}
 	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Requeue(headers map[string][]string, delay int64) error {
+	if atomic.LoadUint64(i.Options.stopped) == 1 {
+		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
+	}
 	// overwrite the delay
 	i.Options.Delay = delay
-	i.Headers = headers
+	i.headers = headers
 
 	i.atomicallyReduceCount()
 
@@ -136,15 +147,15 @@ func (i *Item) atomicallyReduceCount() {
 	}
 }
 
-func fromJob(job jobs.Job) *Item {
+func fromJob(job jobs.Message) *Item {
 	return &Item{
 		Job:     job.Name(),
 		Ident:   job.ID(),
 		Payload: job.Payload(),
-		Headers: job.Headers(),
+		headers: job.Headers(),
 		Options: &Options{
 			Priority: job.Priority(),
-			Pipeline: job.Pipeline(),
+			Pipeline: job.GroupID(),
 			Delay:    job.Delay(),
 		},
 	}
