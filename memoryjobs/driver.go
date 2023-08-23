@@ -9,7 +9,6 @@ import (
 
 	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/sdk/v4/utils"
 	jprop "go.opentelemetry.io/contrib/propagators/jaeger"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -90,8 +89,8 @@ func FromConfig(
 		log:         log,
 		pq:          pq,
 		goroutines:  0,
-		msgInFlight: utils.Int64(0),
-		delayed:     utils.Int64(0),
+		msgInFlight: toPtr(int64(0)),
+		delayed:     toPtr(int64(0)),
 		stopCh:      make(chan struct{}),
 	}
 
@@ -108,7 +107,7 @@ func FromConfig(
 		jb.cfg.Prefetch = 100_000
 	}
 
-	jb.msgInFlightLimit = utils.Int64(jb.cfg.Prefetch)
+	jb.msgInFlightLimit = toPtr(jb.cfg.Prefetch)
 
 	if jb.cfg.Priority == 0 {
 		jb.cfg.Priority = 10
@@ -149,9 +148,9 @@ func FromPipeline(
 		cond:             sync.Cond{L: &sync.Mutex{}},
 		localQueue:       make(chan *Item, 100_000),
 		goroutines:       0,
-		msgInFlight:      utils.Int64(0),
-		msgInFlightLimit: utils.Int64(pref),
-		delayed:          utils.Int64(0),
+		msgInFlight:      toPtr(int64(0)),
+		msgInFlightLimit: toPtr(pref),
+		delayed:          toPtr(int64(0)),
 		priority:         pipeline.Priority(),
 		stopCh:           make(chan struct{}),
 	}
@@ -395,4 +394,8 @@ func (c *Driver) consume() {
 
 func ready(r uint32) bool {
 	return r > 0
+}
+
+func toPtr[T any](v T) *T {
+	return &v
 }
