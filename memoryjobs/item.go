@@ -5,11 +5,11 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/goccy/go-json"
 	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
 	"github.com/roadrunner-server/errors"
-	"github.com/roadrunner-server/sdk/v4/utils"
 )
 
 type Item struct {
@@ -64,7 +64,7 @@ func (i *Item) Priority() int64 {
 
 // Body packs job payload into binary payload.
 func (i *Item) Body() []byte {
-	return utils.AsBytes(i.Payload)
+	return strToBytes(i.Payload)
 }
 
 // Context packs job context (job, id) into binary payload.
@@ -159,4 +159,12 @@ func fromJob(job jobs.Message) *Item {
 			Delay:    job.Delay(),
 		},
 	}
+}
+
+func strToBytes(data string) []byte {
+	if data == "" {
+		return nil
+	}
+
+	return unsafe.Slice(unsafe.StringData(data), len(data))
 }
