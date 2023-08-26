@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
+	"github.com/roadrunner-server/api/v4/plugins/v3/jobs"
 	"github.com/roadrunner-server/errors"
 	jprop "go.opentelemetry.io/contrib/propagators/jaeger"
 	"go.opentelemetry.io/otel"

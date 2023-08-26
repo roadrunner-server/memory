@@ -5,10 +5,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	"unsafe"
 
 	"github.com/goccy/go-json"
-	"github.com/roadrunner-server/api/v4/plugins/v2/jobs"
+	"github.com/roadrunner-server/api/v4/plugins/v3/jobs"
 	"github.com/roadrunner-server/errors"
 )
 
@@ -18,7 +17,7 @@ type Item struct {
 	// Ident is unique identifier of the job, should be provided from outside
 	Ident string `json:"id"`
 	// Payload is string data (usually JSON) passed to Job broker.
-	Payload string `json:"payload"`
+	Payload []byte `json:"payload"`
 	// Headers with key-values pairs
 	headers map[string][]string
 	// Options contains set of PipelineOptions specific to job execution. Can be empty.
@@ -64,7 +63,7 @@ func (i *Item) Priority() int64 {
 
 // Body packs job payload into binary payload.
 func (i *Item) Body() []byte {
-	return strToBytes(i.Payload)
+	return i.Payload
 }
 
 // Context packs job context (job, id) into binary payload.
@@ -97,30 +96,30 @@ func (i *Item) Headers() map[string][]string {
 }
 
 func (i *Item) Ack() error {
+	// reduce number of the all active jobs
+	i.atomicallyReduceCount()
 	if atomic.LoadUint64(i.Options.stopped) == 1 {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
-	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Nack() error {
+	i.atomicallyReduceCount()
 	if atomic.LoadUint64(i.Options.stopped) == 1 {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
-	i.atomicallyReduceCount()
 	return nil
 }
 
 func (i *Item) Requeue(headers map[string][]string, delay int64) error {
+	i.atomicallyReduceCount()
 	if atomic.LoadUint64(i.Options.stopped) == 1 {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
 	// overwrite the delay
 	i.Options.Delay = delay
 	i.headers = headers
-
-	i.atomicallyReduceCount()
 
 	err := i.Options.requeueFn(context.Background(), i)
 	if err != nil {
@@ -159,12 +158,4 @@ func fromJob(job jobs.Message) *Item {
 			Delay:    job.Delay(),
 		},
 	}
-}
-
-func strToBytes(data string) []byte {
-	if data == "" {
-		return nil
-	}
-
-	return unsafe.Slice(unsafe.StringData(data), len(data))
 }
