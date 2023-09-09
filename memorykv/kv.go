@@ -26,8 +26,6 @@ type cb struct {
 }
 
 type Driver struct {
-	mu sync.RWMutex
-
 	heap sync.Map // map[string]kv.Item
 	// callbacks contains all callbacks channels for the keys
 	callbacks       sync.Map // map[string]*cb
