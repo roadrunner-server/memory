@@ -2,7 +2,7 @@ module github.com/roadrunner-server/memory/v4
 
 go 1.21
 
-toolchain go1.21.0
+toolchain go1.21.4
 
 require (
 	github.com/goccy/go-json v0.10.2
@@ -24,5 +24,5 @@ require (
 	go.opentelemetry.io/otel/metric v1.21.0 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
 )
