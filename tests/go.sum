@@ -184,8 +184,8 @@ github.com/roadrunner-server/errors v1.3.0 h1:kLVXpXne0jMReN7pj8KIhyYyjqKjsPC5DR
 github.com/roadrunner-server/errors v1.3.0/go.mod h1:XYVuhXvxi3yQaP/zCLB6QRZ0JvQIRaBa0SKFHL4WLKg=
 github.com/roadrunner-server/goridge/v3 v3.8.1 h1:mdS5lDKQwPuVJ2jwW7l5cngJNJiie7xEGwpgw7a6CuQ=
 github.com/roadrunner-server/goridge/v3 v3.8.1/go.mod h1:L5UkNzD8aKLz6TzpqmmiHOJ6EnsadsWEYNoqK/4qoK0=
-github.com/roadrunner-server/http/v4 v4.4.10 h1:yEJSRcGxphXyS5h7dl+RgmVfemRXgVsJA7DnSQvON8s=
-github.com/roadrunner-server/http/v4 v4.4.10/go.mod h1:haEDE8eF/d4ZkTS/3dyGAIlbS3OXPDE3Bhsl+gcws+A=
+github.com/roadrunner-server/http/v4 v4.4.11 h1:/K4c4j/7obCvD6MBAgaCfohqPQ1A7M+qfvk5TWrFpHk=
+github.com/roadrunner-server/http/v4 v4.4.11/go.mod h1:VMwAKaZS6iBGTK+CTZDbEGTZfPpsdMrbbmk8KOu7Aa8=
 github.com/roadrunner-server/informer/v4 v4.3.12 h1:0j2v03XdnW0340HlHtK0RxtG1heRN4bLReTM7SQZlY0=
 github.com/roadrunner-server/informer/v4 v4.3.12/go.mod h1:J3BoB3zkmxjaDWsxFCW1miynwcqVmkoj5aC9Gm0fCVs=
 github.com/roadrunner-server/jobs/v4 v4.7.11 h1:cDDUH41O1inLoiiQ9+BJIe3wJlloeZxVrrEi43UVfCo=
