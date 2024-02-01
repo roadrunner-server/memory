@@ -11,7 +11,7 @@ require (
 	github.com/roadrunner-server/config/v4 v4.6.6
 	github.com/roadrunner-server/endure/v2 v2.4.3
 	github.com/roadrunner-server/goridge/v3 v3.8.1
-	github.com/roadrunner-server/http/v4 v4.4.12
+	github.com/roadrunner-server/http/v4 v4.5.0
 	github.com/roadrunner-server/informer/v4 v4.3.13
 	github.com/roadrunner-server/jobs/v4 v4.7.12
 	github.com/roadrunner-server/kv/v4 v4.4.13
@@ -74,7 +74,7 @@ require (
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/quic-go v0.41.0 // indirect
 	github.com/roadrunner-server/errors v1.4.0 // indirect
-	github.com/roadrunner-server/sdk/v4 v4.5.6 // indirect
+	github.com/roadrunner-server/sdk/v4 v4.6.0 // indirect
 	github.com/roadrunner-server/tcplisten v1.4.0 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
