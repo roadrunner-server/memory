@@ -12,13 +12,13 @@ require (
 	github.com/roadrunner-server/http/v4 v4.6.0
 	github.com/roadrunner-server/informer/v4 v4.4.0
 	github.com/roadrunner-server/jobs/v4 v4.8.0
-	github.com/roadrunner-server/kv/v4 v4.4.16
+	github.com/roadrunner-server/kv/v4 v4.5.0
 	github.com/roadrunner-server/logger/v4 v4.3.0
 	github.com/roadrunner-server/memory/v4 v4.6.16
 	github.com/roadrunner-server/otel/v4 v4.4.0
-	github.com/roadrunner-server/resetter/v4 v4.1.2
+	github.com/roadrunner-server/resetter/v4 v4.2.0
 	github.com/roadrunner-server/rpc/v4 v4.3.0
-	github.com/roadrunner-server/server/v4 v4.5.9
+	github.com/roadrunner-server/server/v4 v4.7.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 )
@@ -66,7 +66,7 @@ require (
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/quic-go v0.42.0 // indirect
 	github.com/roadrunner-server/errors v1.4.0 // indirect
-	github.com/roadrunner-server/sdk/v4 v4.7.0 // indirect
+	github.com/roadrunner-server/sdk/v4 v4.7.1 // indirect
 	github.com/roadrunner-server/tcplisten v1.4.0 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/sagikazarmark/locafero v0.4.0 // indirect
