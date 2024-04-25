@@ -41,7 +41,7 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/google/pprof v0.0.0-20240424203803-57759fc7b526 // indirect
+	github.com/google/pprof v0.0.0-20240424215950-a892ee059fd6 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -79,8 +79,8 @@ require (
 	github.com/spf13/viper v1.18.2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
-	github.com/tklauser/go-sysconf v0.3.13 // indirect
-	github.com/tklauser/numcpus v0.7.0 // indirect
+	github.com/tklauser/go-sysconf v0.3.14 // indirect
+	github.com/tklauser/numcpus v0.8.0 // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
