@@ -2,6 +2,8 @@ module tests
 
 go 1.22.2
 
+toolchain go1.22.3
+
 require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
@@ -27,7 +29,8 @@ replace github.com/roadrunner-server/memory/v4 => ../
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/caddyserver/certmagic v0.20.0 // indirect
+	github.com/caddyserver/certmagic v0.21.0 // indirect
+	github.com/caddyserver/zerossl v0.1.2 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -41,7 +44,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
-	github.com/google/pprof v0.0.0-20240430035430-e4905b036c4e // indirect
+	github.com/google/pprof v0.0.0-20240507183855-6f11f98ebb1c // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.1 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
@@ -52,9 +55,10 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mholt/acmez v1.2.0 // indirect
+	github.com/mholt/acmez/v2 v2.0.1 // indirect
 	github.com/miekg/dns v1.1.59 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/onsi/ginkgo/v2 v2.17.2 // indirect
+	github.com/onsi/ginkgo/v2 v2.17.3 // indirect
 	github.com/openzipkin/zipkin-go v0.4.3 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
