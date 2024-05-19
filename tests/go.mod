@@ -6,19 +6,19 @@ require (
 	github.com/goccy/go-json v0.10.2
 	github.com/google/uuid v1.6.0
 	github.com/roadrunner-server/api/v4 v4.12.0
-	github.com/roadrunner-server/config/v4 v4.8.1
+	github.com/roadrunner-server/config/v4 v4.8.2
 	github.com/roadrunner-server/endure/v2 v2.4.4
 	github.com/roadrunner-server/goridge/v3 v3.8.2
-	github.com/roadrunner-server/http/v4 v4.7.3
-	github.com/roadrunner-server/informer/v4 v4.5.1
-	github.com/roadrunner-server/jobs/v4 v4.9.1
-	github.com/roadrunner-server/kv/v4 v4.6.1
-	github.com/roadrunner-server/logger/v4 v4.4.1
+	github.com/roadrunner-server/http/v4 v4.7.4
+	github.com/roadrunner-server/informer/v4 v4.5.2
+	github.com/roadrunner-server/jobs/v4 v4.9.2
+	github.com/roadrunner-server/kv/v4 v4.6.2
+	github.com/roadrunner-server/logger/v4 v4.4.2
 	github.com/roadrunner-server/memory/v4 v4.6.16
-	github.com/roadrunner-server/otel/v4 v4.5.1
-	github.com/roadrunner-server/resetter/v4 v4.3.1
-	github.com/roadrunner-server/rpc/v4 v4.4.1
-	github.com/roadrunner-server/server/v4 v4.8.1
+	github.com/roadrunner-server/otel/v4 v4.5.2
+	github.com/roadrunner-server/resetter/v4 v4.3.2
+	github.com/roadrunner-server/rpc/v4 v4.4.2
+	github.com/roadrunner-server/server/v4 v4.8.2
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
 )
@@ -66,7 +66,7 @@ require (
 	github.com/prometheus/common v0.53.0 // indirect
 	github.com/prometheus/procfs v0.15.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
-	github.com/quic-go/quic-go v0.43.1 // indirect
+	github.com/quic-go/quic-go v0.44.0 // indirect
 	github.com/roadrunner-server/errors v1.4.0 // indirect
 	github.com/roadrunner-server/sdk/v4 v4.7.2 // indirect
 	github.com/roadrunner-server/tcplisten v1.4.0 // indirect
