@@ -99,7 +99,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.27.0 // indirect
 	go.opentelemetry.io/otel/trace v1.27.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.2.0 // indirect
-	go.temporal.io/api v1.33.0 // indirect
+	go.temporal.io/api v1.34.0 // indirect
 	go.temporal.io/sdk v1.26.1 // indirect
 	go.temporal.io/sdk/contrib/opentelemetry v0.5.0 // indirect
 	go.uber.org/mock v0.4.0 // indirect
