@@ -39,7 +39,7 @@ func TestMemoryInit(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-init.yaml",
 		Prefix:  "rr",
 	}
@@ -123,7 +123,7 @@ func TestMemoryPQ(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2023.2.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-pq.yaml",
 		Prefix:  "rr",
 	}
@@ -213,7 +213,7 @@ func TestMemoryInitV27(t *testing.T) {
 	cfg := &config.Plugin{
 		Path:    "configs/.rr-memory-init-v27.yaml",
 		Prefix:  "rr",
-		Version: "2.7.0",
+		Version: "2024.1.0",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -294,7 +294,7 @@ func TestMemoryInitV27BadResp(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-init-v27-br.yaml",
 		Prefix:  "rr",
 	}
@@ -374,7 +374,7 @@ func TestMemoryCreate(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2023.2.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-create.yaml",
 		Prefix:  "rr",
 	}
@@ -455,7 +455,7 @@ func TestMemoryDeclare(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-declare.yaml",
 		Prefix:  "rr",
 	}
@@ -542,7 +542,7 @@ func TestMemoryPauseResume(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-pause-resume.yaml",
 		Prefix:  "rr",
 	}
@@ -630,7 +630,7 @@ func TestMemoryJobsError(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-jobs-err.yaml",
 		Prefix:  "rr",
 	}
@@ -719,7 +719,7 @@ func TestMemoryStats(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.9.0",
+		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-declare.yaml",
 		Prefix:  "rr",
 	}
@@ -840,7 +840,7 @@ func TestMemoryPrefetch(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
-		Version: "2.12.1",
+		Version: "2024.1.1",
 		Path:    "configs/.rr-memory-prefetch.yaml",
 		Prefix:  "rr",
 	}
