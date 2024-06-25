@@ -2,14 +2,17 @@ package memoryjobs
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/roadrunner-server/api/v4/plugins/v3/jobs"
+	"github.com/roadrunner-server/api/v4/plugins/v4/jobs"
 	"github.com/roadrunner-server/errors"
 )
+
+var _ jobs.Job = (*Item)(nil)
 
 type Item struct {
 	// Job contains name of job broker (usually PHP class).
@@ -34,7 +37,7 @@ type Options struct {
 	Pipeline string `json:"pipeline,omitempty"`
 
 	// Delay defines time duration to delay execution for. Defaults to none.
-	Delay int64 `json:"delay,omitempty"`
+	Delay int `json:"delay,omitempty"`
 
 	// private
 	stopped     *uint64
@@ -104,6 +107,24 @@ func (i *Item) Ack() error {
 	return nil
 }
 
+func (i *Item) NackWithOptions(redeliver bool, delay int) error {
+	i.atomicallyReduceCount()
+	if atomic.LoadUint64(i.Options.stopped) == 1 {
+		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
+	}
+
+	if redeliver {
+		err := i.Options.requeueFn(context.Background(), i)
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return nil
+}
+
 func (i *Item) Nack() error {
 	i.atomicallyReduceCount()
 	if atomic.LoadUint64(i.Options.stopped) == 1 {
@@ -112,14 +133,14 @@ func (i *Item) Nack() error {
 	return nil
 }
 
-func (i *Item) Requeue(headers map[string][]string, delay int64) error {
+func (i *Item) Requeue(headers map[string][]string, delay int) error {
 	i.atomicallyReduceCount()
 	if atomic.LoadUint64(i.Options.stopped) == 1 {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
 	// overwrite the delay
 	i.Options.Delay = delay
-	i.headers = headers
+	maps.Copy(i.headers, headers)
 
 	err := i.Options.requeueFn(context.Background(), i)
 	if err != nil {
@@ -155,7 +176,7 @@ func fromJob(job jobs.Message) *Item {
 		Options: &Options{
 			Priority: job.Priority(),
 			Pipeline: job.GroupID(),
-			Delay:    job.Delay(),
+			Delay:    int(job.Delay()),
 		},
 	}
 }
