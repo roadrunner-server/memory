@@ -343,7 +343,7 @@ func (d *Driver) Clear() error {
 	newCh := make(chan struct{})
 	d.broadcastStopCh.Swap(&newCh)
 
-	d.heap.Range(func(key any, value any) bool {
+	d.heap.Range(func(key any, _ any) bool {
 		d.heap.Delete(key)
 		return true
 	})

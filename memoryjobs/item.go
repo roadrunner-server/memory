@@ -114,6 +114,7 @@ func (i *Item) NackWithOptions(redeliver bool, delay int) error {
 	}
 
 	if redeliver {
+		i.Options.Delay = delay
 		err := i.Options.requeueFn(context.Background(), i)
 		if err != nil {
 			return err
