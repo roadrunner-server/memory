@@ -18,7 +18,7 @@ import (
 	"github.com/roadrunner-server/http/v4"
 	"github.com/roadrunner-server/kv/v4"
 	"github.com/roadrunner-server/logger/v4"
-	"github.com/roadrunner-server/memory/v4"
+	"github.com/roadrunner-server/memory/v5"
 	"github.com/roadrunner-server/otel/v4"
 	rpcPlugin "github.com/roadrunner-server/rpc/v4"
 	"github.com/roadrunner-server/server/v4"

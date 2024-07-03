@@ -4,8 +4,8 @@ import (
 	"github.com/roadrunner-server/api/v4/plugins/v1/kv"
 	"github.com/roadrunner-server/api/v4/plugins/v4/jobs"
 	"github.com/roadrunner-server/endure/v2/dep"
-	"github.com/roadrunner-server/memory/v4/memoryjobs"
-	"github.com/roadrunner-server/memory/v4/memorykv"
+	"github.com/roadrunner-server/memory/v5/memoryjobs"
+	"github.com/roadrunner-server/memory/v5/memorykv"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
 )
