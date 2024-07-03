@@ -29,7 +29,7 @@ type Tracer interface {
 type Configurer interface {
 	// UnmarshalKey takes a single key and unmarshal it into a Struct.
 	UnmarshalKey(name string, out any) error
-	// Has checks if config section exists.
+	// Has checks if a config section exists.
 	Has(name string) bool
 }
 
@@ -57,12 +57,12 @@ func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
 	return memorykv.NewInMemoryDriver(key, p.log, p.cfg, p.tracer)
 }
 
-// DriverFromConfig constructs memory driver from the .rr.yaml configuration
-func (p *Plugin) DriverFromConfig(configKey string, pq jobs.Queue, pipeline jobs.Pipeline, _ chan<- jobs.Commander) (jobs.Driver, error) {
+// DriverFromConfig constructs a memory driver from the .rr.yaml configuration
+func (p *Plugin) DriverFromConfig(configKey string, pq jobs.Queue, pipeline jobs.Pipeline) (jobs.Driver, error) {
 	return memoryjobs.FromConfig(p.tracer, configKey, p.log, p.cfg, pipeline, pq)
 }
 
-// DriverFromPipeline constructs memory driver from pipeline
-func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq jobs.Queue, _ chan<- jobs.Commander) (jobs.Driver, error) {
+// DriverFromPipeline constructs a memory driver from a pipeline
+func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq jobs.Queue) (jobs.Driver, error) {
 	return memoryjobs.FromPipeline(p.tracer, pipe, p.log, pq)
 }
