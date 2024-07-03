@@ -15,22 +15,22 @@ import (
 var _ jobs.Job = (*Item)(nil)
 
 type Item struct {
-	// Job contains name of job broker (usually PHP class).
+	// Job contains the name of job broker (usually PHP class).
 	Job string `json:"job"`
-	// Ident is unique identifier of the job, should be provided from outside
+	// Ident is a unique identifier of the job, should be provided from outside
 	Ident string `json:"id"`
 	// Payload is string data (usually JSON) passed to Job broker.
 	Payload []byte `json:"payload"`
 	// Headers with key-values pairs
 	headers map[string][]string
-	// Options contains set of PipelineOptions specific to job execution. Can be empty.
+	// Options contain a set of PipelineOptions specific to job execution. Can be empty.
 	Options *Options `json:"options,omitempty"`
 }
 
-// Options carry information about how to handle given job.
+// Options carry information about how to handle a given job.
 type Options struct {
 	// Priority is job priority, default - 10
-	// pointer to distinguish 0 as a priority and nil as priority not set
+	// pointer to distinguish 0 as a priority and nil as a priority not set
 	Priority int64 `json:"priority"`
 
 	// Pipeline manually specified pipeline.
@@ -47,7 +47,7 @@ type Options struct {
 	delayed     *int64
 }
 
-// DelayDuration returns delay duration in a form of time.Duration.
+// DelayDuration returns delay duration in the form of time.Duration.
 func (o *Options) DelayDuration() time.Duration {
 	return time.Second * time.Duration(o.Delay)
 }
@@ -99,7 +99,7 @@ func (i *Item) Headers() map[string][]string {
 }
 
 func (i *Item) Ack() error {
-	// reduce number of the all active jobs
+	// reduce the number of the all active jobs
 	i.atomicallyReduceCount()
 	if atomic.LoadUint64(i.Options.stopped) == 1 {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
