@@ -11,7 +11,7 @@ require (
 	github.com/roadrunner-server/goridge/v3 v3.8.2
 	github.com/roadrunner-server/http/v5 v5.0.0
 	github.com/roadrunner-server/informer/v5 v5.0.0
-	github.com/roadrunner-server/jobs/v5 v5.0.0
+	github.com/roadrunner-server/jobs/v5 v5.0.1
 	github.com/roadrunner-server/kv/v5 v5.0.0
 	github.com/roadrunner-server/logger/v5 v5.0.0
 	github.com/roadrunner-server/memory/v5 v5.0.0
