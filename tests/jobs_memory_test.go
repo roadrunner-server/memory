@@ -20,16 +20,16 @@ import (
 	"github.com/goccy/go-json"
 	jobsProto "github.com/roadrunner-server/api/v4/build/jobs/v1"
 	jobState "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
-	"github.com/roadrunner-server/config/v4"
+	"github.com/roadrunner-server/config/v5"
 	"github.com/roadrunner-server/endure/v2"
 	goridgeRpc "github.com/roadrunner-server/goridge/v3/pkg/rpc"
-	"github.com/roadrunner-server/informer/v4"
-	"github.com/roadrunner-server/jobs/v4"
+	"github.com/roadrunner-server/informer/v5"
+	"github.com/roadrunner-server/jobs/v5"
 	"github.com/roadrunner-server/memory/v5"
-	"github.com/roadrunner-server/otel/v4"
-	"github.com/roadrunner-server/resetter/v4"
-	rpcPlugin "github.com/roadrunner-server/rpc/v4"
-	"github.com/roadrunner-server/server/v4"
+	"github.com/roadrunner-server/otel/v5"
+	"github.com/roadrunner-server/resetter/v5"
+	rpcPlugin "github.com/roadrunner-server/rpc/v5"
+	"github.com/roadrunner-server/server/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -41,7 +41,6 @@ func TestMemoryInit(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-init.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -125,7 +124,6 @@ func TestMemoryPQ(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-pq.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -212,7 +210,6 @@ func TestMemoryInitV27(t *testing.T) {
 
 	cfg := &config.Plugin{
 		Path:    "configs/.rr-memory-init-v27.yaml",
-		Prefix:  "rr",
 		Version: "2024.1.0",
 	}
 
@@ -296,7 +293,6 @@ func TestMemoryInitV27BadResp(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-init-v27-br.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -376,7 +372,6 @@ func TestMemoryCreate(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-create.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -457,7 +452,6 @@ func TestMemoryDeclare(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-declare.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -544,7 +538,6 @@ func TestMemoryPauseResume(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-pause-resume.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -632,7 +625,6 @@ func TestMemoryJobsError(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-jobs-err.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -721,7 +713,6 @@ func TestMemoryStats(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.0",
 		Path:    "configs/.rr-memory-declare.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -842,7 +833,6 @@ func TestMemoryPrefetch(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2024.1.1",
 		Path:    "configs/.rr-memory-prefetch.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
@@ -933,7 +923,6 @@ func TestMemoryTracer(t *testing.T) {
 	cfg := &config.Plugin{
 		Version: "2023.1.0",
 		Path:    "configs/.rr-memory-tracer.yaml",
-		Prefix:  "rr",
 	}
 
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
