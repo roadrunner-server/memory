@@ -1,0 +1,36 @@
+{
+  "$id": "https://raw.githubusercontent.com/roadrunner-server/memory/refs/heads/master/schema.json",
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "title": "roadrunner-memory",
+  "description": "The schema contains all the valid configuration parameters for the Memory plugin for the roadrunner job system.",
+  "definitions": {
+    "pipeline": {
+      "type": "object",
+      "required": [
+        "driver"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "driver": {
+          "type": "string",
+          "enum": [
+            "memory"
+          ]
+        },
+        "config": {
+          "type": "object",
+          "description": "Configuration options for the Memory pipeline.",
+          "additionalProperties": false,
+          "properties": {
+            "priority": {
+              "$ref": "https://raw.githubusercontent.com/roadrunner-server/jobs/refs/heads/master/schema.json#/definitions/PipelineProperties/priority"
+            },
+            "prefetch": {
+              "$ref": "https://raw.githubusercontent.com/roadrunner-server/jobs/refs/heads/master/schema.json#/definitions/PipelineProperties/prefetch"
+            }
+          }
+        }
+      }
+    }
+  }
+}
