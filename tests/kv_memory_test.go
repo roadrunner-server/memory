@@ -92,10 +92,13 @@ func TestInMemoryOrder(t *testing.T) {
 	time.Sleep(time.Second * 1)
 	stopCh <- struct{}{}
 	wg.Wait()
+
+	t.Cleanup(func() {
+
+	})
 }
 
 func TestSetManyMemory(t *testing.T) {
-	t.Skip("This test is executed manually")
 	cont := endure.New(slog.LevelDebug)
 
 	cfg := &config.Plugin{
@@ -158,6 +161,11 @@ func TestSetManyMemory(t *testing.T) {
 
 	time.Sleep(time.Second * 1)
 
+	ms := &runtime.MemStats{}
+	runtime.ReadMemStats(ms)
+	prevAlloc := ms.Alloc
+	ngprev := runtime.NumGoroutine()
+
 	conn, err := net.Dial("tcp", "127.0.0.1:6666")
 	assert.NoError(t, err)
 	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
@@ -190,14 +198,33 @@ func TestSetManyMemory(t *testing.T) {
 	}
 
 	ret := &kvProto.Response{}
-	for i := 0; i < 1000000; i++ {
-		t.Log("Number Goroutines: ", runtime.NumGoroutine())
+	for i := 0; i < 10000; i++ {
 		err = client.Call("kv.Set", data, ret)
 		require.NoError(t, err)
 	}
+	runtime.GC()
 
-	t.Log("sleeping")
-	time.Sleep(time.Minute * 1)
+	ms = &runtime.MemStats{}
+	runtime.ReadMemStats(ms)
+	currAlloc := ms.Alloc
+	currNg := runtime.NumGoroutine()
+
+	if currAlloc-prevAlloc > 10000000 { // 10MB
+		t.Log("Prev alloc", prevAlloc)
+		t.Log("Curr alloc", currAlloc)
+		t.Error("Memory leak detected")
+	}
+
+	if currNg-ngprev > 10 {
+		t.Log("Prev ng", ngprev)
+		t.Log("Curr ng", currNg)
+		t.Error("Goroutine leak detected")
+	}
+
+	time.Sleep(time.Second * 5)
+
+	err = client.Call("kv.Clear", data, ret)
+	require.NoError(t, err)
 
 	stopCh <- struct{}{}
 	wg.Wait()
@@ -461,4 +488,7 @@ func testRPCMethodsInMemory(t *testing.T) {
 	err = client.Call("kv.Has", dataClear, ret)
 	assert.NoError(t, err)
 	assert.Len(t, ret.GetItems(), 0) // should be 5
+
+	err = client.Call("kv.Clear", data, ret)
+	require.NoError(t, err)
 }
