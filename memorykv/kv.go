@@ -195,6 +195,7 @@ func (d *Driver) Set(items ...kv.Item) error {
 			// create callback to delete the key from the heap
 			stopCh, updateCh := d.ttlcallback(items[i].Key(), tm, *d.broadcastStopCh.Load())
 
+			d.log.Debug("saving item with TTL", zap.String("key", items[i].Key()), zap.String("ttl", items[i].Timeout()))
 			d.heap.Set(items[i].Key(), &Item{
 				key:     items[i].Key(),
 				value:   items[i].Value(),
@@ -247,13 +248,18 @@ func (d *Driver) MExpire(items ...kv.Item) error {
 			ttm = 0
 		}
 
-		if clb, ok := d.heap.Get(items[i].Key()); ok {
+		// check if the key exists and has a callback
+		if clb, ok := d.heap.Get(items[i].Key()); ok && clb.callback != nil {
 			// send new ttl to the callback
 			clb.callback.updateCh <- ttm
+			// if not -> set the callback
 		} else {
 			// we should set the callback
 			// create callback to delete the key from the heap
 			stopCh, updateCh := d.ttlcallback(items[i].Key(), ttm, *d.broadcastStopCh.Load())
+			// just to be sure
+			d.heap.removeEntry(items[i].Key())
+			// set the item with the callback
 			d.heap.Set(items[i].Key(), &Item{
 				key:     items[i].Key(),
 				value:   items[i].Value(),
