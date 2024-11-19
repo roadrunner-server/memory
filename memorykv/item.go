@@ -1,9 +1,10 @@
 package memorykv
 
 type Item struct {
-	key     string
-	value   []byte
-	timeout string
+	key      string
+	value    []byte
+	timeout  string
+	callback *cb
 }
 
 func (i *Item) Key() string {

@@ -6,6 +6,7 @@ import (
 	"net/rpc"
 	"os"
 	"os/signal"
+	"runtime"
 	"sync"
 	"syscall"
 	"testing"
@@ -23,6 +24,7 @@ import (
 	rpcPlugin "github.com/roadrunner-server/rpc/v5"
 	"github.com/roadrunner-server/server/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInMemoryOrder(t *testing.T) {
@@ -88,6 +90,145 @@ func TestInMemoryOrder(t *testing.T) {
 	}()
 
 	time.Sleep(time.Second * 1)
+	stopCh <- struct{}{}
+	wg.Wait()
+
+	t.Cleanup(func() {
+
+	})
+}
+
+func TestSetManyMemory(t *testing.T) {
+	cont := endure.New(slog.LevelDebug)
+
+	cfg := &config.Plugin{
+		Version: "2024.2.0",
+		Path:    "configs/.rr-in-memory-memory.yaml",
+	}
+
+	err := cont.RegisterAll(
+		cfg,
+		&kv.Plugin{},
+		&memory.Plugin{},
+		&otel.Plugin{},
+		&rpcPlugin.Plugin{},
+		&logger.Plugin{},
+	)
+	assert.NoError(t, err)
+
+	err = cont.Init()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch, err := cont.Serve()
+	assert.NoError(t, err)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+
+	stopCh := make(chan struct{}, 1)
+
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case e := <-ch:
+				assert.Fail(t, "error", e.Error.Error())
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+			case <-sig:
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+				return
+			case <-stopCh:
+				// timeout
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+				return
+			}
+		}
+	}()
+
+	time.Sleep(time.Second * 1)
+
+	ms := &runtime.MemStats{}
+	runtime.ReadMemStats(ms)
+	prevAlloc := ms.Alloc
+	ngprev := runtime.NumGoroutine()
+
+	conn, err := net.Dial("tcp", "127.0.0.1:6666")
+	assert.NoError(t, err)
+	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
+	defer func() {
+		_ = client.Close()
+	}()
+
+	tt := time.Now().Add(time.Minute * 10).Format(time.RFC3339)
+	data := &kvProto.Request{
+		Storage: "memory-rr",
+		Items: []*kvProto.Item{
+			{
+				Key:     "a",
+				Value:   []byte("aa"),
+				Timeout: tt,
+			},
+			{
+				Key:     "b",
+				Value:   []byte("bb"),
+				Timeout: tt,
+			},
+			{
+				Key:     "c",
+				Value:   []byte("cc"),
+				Timeout: tt,
+			},
+			{
+				Key:     "d",
+				Value:   []byte("dd"),
+				Timeout: tt,
+			},
+		},
+	}
+
+	ret := &kvProto.Response{}
+	for i := 0; i < 10000; i++ {
+		err = client.Call("kv.Set", data, ret)
+		require.NoError(t, err)
+	}
+	runtime.GC()
+
+	ms = &runtime.MemStats{}
+	runtime.ReadMemStats(ms)
+	currAlloc := ms.Alloc
+	currNg := runtime.NumGoroutine()
+
+	if currAlloc-prevAlloc > 10000000 { // 10MB
+		t.Log("Prev alloc", prevAlloc)
+		t.Log("Curr alloc", currAlloc)
+		t.Error("Memory leak detected")
+	}
+
+	if currNg-ngprev > 10 {
+		t.Log("Prev ng", ngprev)
+		t.Log("Curr ng", currNg)
+		t.Error("Goroutine leak detected")
+	}
+
+	time.Sleep(time.Second * 5)
+
+	err = client.Call("kv.Clear", data, ret)
+	require.NoError(t, err)
+
 	stopCh <- struct{}{}
 	wg.Wait()
 }
@@ -350,4 +491,7 @@ func testRPCMethodsInMemory(t *testing.T) {
 	err = client.Call("kv.Has", dataClear, ret)
 	assert.NoError(t, err)
 	assert.Len(t, ret.GetItems(), 0) // should be 5
+
+	err = client.Call("kv.Clear", data, ret)
+	require.NoError(t, err)
 }

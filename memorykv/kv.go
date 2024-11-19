@@ -9,7 +9,6 @@ import (
 
 	"github.com/roadrunner-server/api/v4/plugins/v1/kv"
 	"github.com/roadrunner-server/errors"
-	"go.opentelemetry.io/otel/attribute"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
 )
@@ -18,23 +17,19 @@ const (
 	tracerName = "inmemory"
 )
 
-type callback func(sCh <-chan struct{})
-
 type cb struct {
 	updateCh chan int // new ttl
 	stopCh   chan struct{}
 }
 
 type Driver struct {
-	heap sync.Map // map[string]kv.Item
-	// callbacks contains all callbacks channels for the keys
-	callbacks       sync.Map // map[string]*cb
+	heap            *hmap
+	mu              *sync.Mutex
 	broadcastStopCh atomic.Pointer[chan struct{}]
 
-	mapSize int64
-	tracer  *sdktrace.TracerProvider
-	log     *zap.Logger
-	cfg     *Config
+	tracer *sdktrace.TracerProvider
+	log    *zap.Logger
+	cfg    *Config
 }
 
 type Configurer interface {
@@ -52,11 +47,10 @@ func NewInMemoryDriver(key string, log *zap.Logger, cfgPlugin Configurer, tracer
 	}
 
 	d := &Driver{
-		callbacks: sync.Map{},
-		heap:      sync.Map{},
-		mapSize:   0,
-		log:       log,
-		tracer:    tracer,
+		mu:     &sync.Mutex{},
+		heap:   newHMap(),
+		log:    log,
+		tracer: tracer,
 	}
 
 	ch := make(chan struct{})
@@ -87,6 +81,7 @@ func (d *Driver) Has(keys ...string) (map[string]bool, error) {
 		return nil, errors.E(op, errors.NoKeys)
 	}
 
+	// todo(rustatian): move this map to a sync.Pool?
 	m := make(map[string]bool)
 	for i := range keys {
 		keyTrimmed := strings.TrimSpace(keys[i])
@@ -94,12 +89,10 @@ func (d *Driver) Has(keys ...string) (map[string]bool, error) {
 			return nil, errors.E(op, errors.EmptyKey)
 		}
 
-		if _, ok := d.heap.Load(keys[i]); ok {
+		if _, ok := d.heap.Get(keys[i]); ok {
 			m[keys[i]] = true
 		}
 	}
-
-	span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
 
 	return m, nil
 }
@@ -117,14 +110,11 @@ func (d *Driver) Get(key string) ([]byte, error) {
 		return nil, errors.E(op, errors.EmptyKey)
 	}
 
-	if data, exist := d.heap.Load(key); exist {
+	if data, exist := d.heap.Get(key); exist {
 		// here might be a panic
 		// but data only could be a string, see Set function
-		span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
-		return data.(kv.Item).Value(), nil
+		return data.Value(), nil
 	}
-
-	span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
 
 	return nil, nil
 }
@@ -151,12 +141,10 @@ func (d *Driver) MGet(keys ...string) (map[string][]byte, error) {
 	m := make(map[string][]byte, len(keys))
 
 	for i := 0; i < len(keys); i++ {
-		if value, ok := d.heap.Load(keys[i]); ok {
-			m[keys[i]] = value.(kv.Item).Value()
+		if value, ok := d.heap.Get(keys[i]); ok {
+			m[keys[i]] = value.Value()
 		}
 	}
-
-	span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
 
 	return m, nil
 }
@@ -175,6 +163,12 @@ func (d *Driver) Set(items ...kv.Item) error {
 		if items[i] == nil {
 			continue
 		}
+
+		// check for the duplicates
+		d.heap.Delete(items[i].Key())
+
+		// at this point the duplicate key is removed
+
 		// TTL is set
 		if items[i].Timeout() != "" {
 			// check the TTL in the item
@@ -186,32 +180,40 @@ func (d *Driver) Set(items ...kv.Item) error {
 
 			tm := int(tt.UTC().Sub(time.Now().UTC()).Seconds())
 			// we already in the future :)
-			if tm < 0 {
-				d.updateAllocatedSize(int64(len(items[i].Key()) + len(items[i].Value()) + len(items[i].Timeout())))
+			if tm <= 0 {
+				d.log.Warn("incorrect TTL time, saving without it", zap.String("key", items[i].Key()))
 				// set item
-				d.heap.Store(items[i].Key(), items[i])
+				d.heap.Set(items[i].Key(), &Item{
+					key:   items[i].Key(),
+					value: items[i].Value(),
+				})
 				continue
 			}
 
-			// create callback to delete the key from the heap
-			clbk, stopCh, updateCh := d.ttlcallback(items[i].Key(), tm)
-			go func() {
-				clbk(*d.broadcastStopCh.Load())
-			}()
+			// at this point, we have valid TTL and should save the item with the callback
 
-			// store the callback since we have TTL
-			d.callbacks.Store(items[i].Key(), &cb{
-				updateCh: updateCh,
-				stopCh:   stopCh,
+			// create callback to delete the key from the heap
+			stopCh, updateCh := d.ttlcallback(items[i].Key(), tm, *d.broadcastStopCh.Load())
+
+			d.log.Debug("saving item with TTL", zap.String("key", items[i].Key()), zap.String("ttl", items[i].Timeout()))
+			d.heap.Set(items[i].Key(), &Item{
+				key:     items[i].Key(),
+				value:   items[i].Value(),
+				timeout: items[i].Timeout(),
+				callback: &cb{
+					updateCh: updateCh,
+					stopCh:   stopCh,
+				},
+			})
+		} else {
+			// set item without TTL
+			d.log.Debug("saving item without TTL", zap.String("key", items[i].Key()))
+			d.heap.Set(items[i].Key(), &Item{
+				key:   items[i].Key(),
+				value: items[i].Value(),
 			})
 		}
-
-		d.updateAllocatedSize(int64(len(items[i].Key()) + len(items[i].Value()) + len(items[i].Timeout())))
-		// set item
-		d.heap.Store(items[i].Key(), items[i])
 	}
-
-	span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
 
 	return nil
 }
@@ -246,25 +248,29 @@ func (d *Driver) MExpire(items ...kv.Item) error {
 			ttm = 0
 		}
 
-		if clb, ok := d.callbacks.Load(items[i].Key()); ok {
+		// check if the key exists and has a callback
+		if clb, ok := d.heap.Get(items[i].Key()); ok && clb.callback != nil {
 			// send new ttl to the callback
-			clb.(*cb).updateCh <- ttm
+			clb.callback.updateCh <- ttm
+			// if not -> set the callback
 		} else {
 			// we should set the callback
 			// create callback to delete the key from the heap
-			clbk, stopCh, updateCh := d.ttlcallback(items[i].Key(), ttm)
-			go func() {
-				clbk(*d.broadcastStopCh.Load())
-			}()
-
-			d.callbacks.Store(items[i].Key(), &cb{
-				updateCh: updateCh,
-				stopCh:   stopCh,
+			stopCh, updateCh := d.ttlcallback(items[i].Key(), ttm, *d.broadcastStopCh.Load())
+			// just to be sure
+			d.heap.removeEntry(items[i].Key())
+			// set the item with the callback
+			d.heap.Set(items[i].Key(), &Item{
+				key:     items[i].Key(),
+				value:   items[i].Value(),
+				timeout: items[i].Timeout(),
+				callback: &cb{
+					updateCh: updateCh,
+					stopCh:   stopCh,
+				},
 			})
 		}
 	}
-
-	span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
 
 	return nil
 }
@@ -291,12 +297,10 @@ func (d *Driver) TTL(keys ...string) (map[string]string, error) {
 	m := make(map[string]string, len(keys))
 
 	for i := range keys {
-		if item, ok := d.heap.Load(keys[i]); ok {
-			m[keys[i]] = item.(kv.Item).Timeout()
+		if item, ok := d.heap.Get(keys[i]); ok {
+			m[keys[i]] = item.Timeout()
 		}
 	}
-
-	span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
 
 	return m, nil
 }
@@ -321,15 +325,14 @@ func (d *Driver) Delete(keys ...string) error {
 	}
 
 	for i := range keys {
-		d.heap.Delete(keys[i])
-		clbk, ok := d.callbacks.LoadAndDelete(keys[i])
+		k, ok := d.heap.LoadAndDelete(keys[i])
 		if ok {
-			// send signal to stop the timer and delete the item
-			clbk.(*cb).stopCh <- struct{}{}
+			if k.callback != nil {
+				// send signal to stop the timer and delete the item
+				k.callback.stopCh <- struct{}{}
+			}
 		}
 	}
-
-	span.SetAttributes(attribute.Int64("allocated memory:bytes", d.loadAllocatedSize()))
 
 	return nil
 }
@@ -342,34 +345,9 @@ func (d *Driver) Clear() error {
 
 	newCh := make(chan struct{})
 	d.broadcastStopCh.Swap(&newCh)
-
-	d.heap.Range(func(key any, _ any) bool {
-		d.heap.Delete(key)
-		return true
-	})
-
-	// zero the allocated size
-	atomic.StoreInt64(&d.mapSize, 0)
+	d.heap.Clean()
 
 	return nil
-}
-
-func (d *Driver) updateAllocatedSize(newsize int64) {
-	if newsize > 0 {
-		atomic.AddInt64(&d.mapSize, newsize)
-		return
-	}
-
-	curr := atomic.LoadInt64(&d.mapSize)
-	if curr >= newsize {
-		atomic.AddInt64(&d.mapSize, newsize)
-	} else {
-		atomic.StoreInt64(&d.mapSize, 0)
-	}
-}
-
-func (d *Driver) loadAllocatedSize() int64 {
-	return atomic.LoadInt64(&d.mapSize)
 }
 
 func (d *Driver) Stop() {
@@ -378,55 +356,53 @@ func (d *Driver) Stop() {
 
 // ================================== PRIVATE ======================================
 
-func (d *Driver) ttlcallback(id string, ttl int) (callback, chan struct{}, chan int) {
+func (d *Driver) ttlcallback(id string, ttl int, sCh <-chan struct{}) (chan struct{}, chan int) {
 	stopCbCh := make(chan struct{}, 1)
 	updateTTLCh := make(chan int, 1)
 
-	// at this point, when adding lock, we should not have the callback
-	return func(sCh <-chan struct{}) {
+	go func(hid string) {
 		// ttl
 		cbttl := ttl
 		ta := time.NewTicker(time.Second * time.Duration(cbttl))
-	loop:
-		select {
-		case <-ta.C:
-			d.log.Debug("ttl expired",
-				zap.String("id", id),
-				zap.Int("ttl seconds", cbttl),
-			)
-			ta.Stop()
-			// broadcast stop channel
-		case <-sCh:
-			d.log.Debug("ttl removed, broadcast call",
-				zap.String("id", id),
-				zap.Int("ttl seconds", cbttl),
-			)
-			ta.Stop()
-			// item stop channel
-		case <-stopCbCh:
-			d.log.Debug("ttl removed, callback call",
-				zap.String("id", id),
-				zap.Int("ttl seconds", cbttl),
-			)
-			ta.Stop()
-		case newTTL := <-updateTTLCh:
-			d.log.Debug("updating ttl",
-				zap.String("id", id),
-				zap.Int("prev_ttl", cbttl),
-				zap.Int("new_ttl", newTTL))
-			// update callback TTL (for logs)
-			cbttl = newTTL
-			ta.Reset(time.Second * time.Duration(newTTL))
-			// in case of TTL we don't need to remove the item, only update TTL
-			goto loop
+		for {
+			select {
+			case <-ta.C:
+				d.log.Debug("ttl expired",
+					zap.String("id", hid),
+					zap.Int("ttl seconds", cbttl),
+				)
+				ta.Stop()
+				// removeEntry removes the entry w/o checking callback
+				d.heap.removeEntry(hid)
+				return
+			case <-sCh:
+				// broadcast stop channel
+				d.log.Debug("ttl removed, broadcast call",
+					zap.String("id", hid),
+					zap.Int("ttl seconds", cbttl),
+				)
+				ta.Stop()
+				// removeEntry removes the entry w/o checking callback
+				d.heap.removeEntry(hid)
+				return
+			case <-stopCbCh:
+				// item stop channel
+				d.log.Debug("ttl removed, callback call",
+					zap.String("id", hid),
+					zap.Int("ttl seconds", cbttl),
+				)
+				return
+			case newTTL := <-updateTTLCh:
+				// in case of TTL we don't need to remove the item, only update TTL
+				d.log.Debug("updating ttl",
+					zap.String("id", hid),
+					zap.Int("prev_ttl", cbttl),
+					zap.Int("new_ttl", newTTL))
+				// update callback TTL (for logs)
+				cbttl = newTTL
+				ta.Reset(time.Second * time.Duration(newTTL))
+			}
 		}
-
-		val, ok := d.heap.LoadAndDelete(id)
-		if ok {
-			// subtract the size of the item
-			d.updateAllocatedSize(-int64(len(id) + len(val.(kv.Item).Value()) + len(val.(kv.Item).Timeout())))
-		}
-
-		d.callbacks.Delete(id)
-	}, stopCbCh, updateTTLCh
+	}(id)
+	return stopCbCh, updateTTLCh
 }
