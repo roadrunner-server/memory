@@ -71,6 +71,7 @@ func (h *hmap) Delete(key string) {
 	delete(h.items, key)
 }
 
+// IMPORTANT: Only use this method when the callback has already been cleaned up.
 func (h *hmap) removeEntry(key string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
