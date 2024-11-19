@@ -1,11 +1,11 @@
 version: "3"
 
 rpc:
-  listen: tcp://127.0.0.1:6001
+  listen: tcp://127.0.0.1:6666
 
 logs:
   mode: development
-  level: debug
+  level: error
 
 kv:
   memory-rr:
