@@ -169,6 +169,9 @@ func TestSetManyMemory(t *testing.T) {
 	conn, err := net.Dial("tcp", "127.0.0.1:6666")
 	assert.NoError(t, err)
 	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
+	defer func() {
+		_ = client.Close()
+	}()
 
 	tt := time.Now().Add(time.Minute * 10).Format(time.RFC3339)
 	data := &kvProto.Request{
