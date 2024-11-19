@@ -346,7 +346,6 @@ func (d *Driver) Clear() error {
 	newCh := make(chan struct{})
 	d.broadcastStopCh.Swap(&newCh)
 	d.heap.Clean()
-	d.heap = newHMap()
 
 	return nil
 }
