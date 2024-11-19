@@ -37,7 +37,10 @@ func (h *hmap) LoadAndDelete(key string) (*Item, bool) {
 	item, ok := h.items[key]
 	if ok {
 		if item.callback != nil {
-			item.callback.stopCh <- struct{}{}
+			select {
+			case item.callback.stopCh <- struct{}{}:
+			default:
+			}
 		}
 		delete(h.items, key)
 	}
@@ -52,12 +55,17 @@ func (h *hmap) Clean() {
 	for k, v := range h.items {
 		if v != nil {
 			if v.callback != nil {
-				v.callback.stopCh <- struct{}{}
+				select {
+				case v.callback.stopCh <- struct{}{}:
+				default:
+				}
 			}
 		}
 
 		delete(h.items, k)
 	}
+
+	h.items = make(map[string]*Item, 10)
 }
 
 func (h *hmap) Delete(key string) {
@@ -65,7 +73,10 @@ func (h *hmap) Delete(key string) {
 	defer h.mu.Unlock()
 
 	if h.items[key] != nil && h.items[key].callback != nil {
-		h.items[key].callback.stopCh <- struct{}{}
+		select {
+		case h.items[key].callback.stopCh <- struct{}{}:
+		default:
+		}
 	}
 
 	delete(h.items, key)
