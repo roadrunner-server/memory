@@ -53,8 +53,8 @@ func (p *Plugin) Collects() []*dep.In {
 
 // Drivers implementation
 
-func (p *Plugin) KvFromConfig(key string) (kv.Storage, error) {
-	return memorykv.NewInMemoryDriver(key, p.log, p.cfg, p.tracer)
+func (p *Plugin) KvFromConfig(_ string) (kv.Storage, error) {
+	return memorykv.NewInMemoryDriver(p.log, p.tracer), nil
 }
 
 // DriverFromConfig constructs a memory driver from the .rr.yaml configuration

@@ -29,19 +29,9 @@ type Driver struct {
 
 	tracer *sdktrace.TracerProvider
 	log    *zap.Logger
-	cfg    *Config
 }
 
-type Configurer interface {
-	// UnmarshalKey takes a single key and unmarshal it into a Struct.
-	UnmarshalKey(name string, out any) error
-	// Has checks if config section exists.
-	Has(name string) bool
-}
-
-func NewInMemoryDriver(key string, log *zap.Logger, cfgPlugin Configurer, tracer *sdktrace.TracerProvider) (*Driver, error) {
-	const op = errors.Op("new_in_memory_driver")
-
+func NewInMemoryDriver(log *zap.Logger, tracer *sdktrace.TracerProvider) *Driver {
 	if tracer == nil {
 		tracer = sdktrace.NewTracerProvider()
 	}
@@ -56,18 +46,7 @@ func NewInMemoryDriver(key string, log *zap.Logger, cfgPlugin Configurer, tracer
 	ch := make(chan struct{})
 	d.broadcastStopCh.Store(&ch)
 
-	err := cfgPlugin.UnmarshalKey(key, &d.cfg)
-	if err != nil {
-		return nil, errors.E(op, err)
-	}
-
-	if d.cfg == nil {
-		return nil, errors.E(op, errors.Errorf("config not found by provided key: %s", key))
-	}
-
-	d.cfg.InitDefaults()
-
-	return d, nil
+	return d
 }
 
 func (d *Driver) Has(keys ...string) (map[string]bool, error) {
