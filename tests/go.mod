@@ -7,7 +7,7 @@ toolchain go1.23.4
 require (
 	github.com/goccy/go-json v0.10.4
 	github.com/google/uuid v1.6.0
-	github.com/roadrunner-server/api/v4 v4.16.0
+	github.com/roadrunner-server/api/v4 v4.17.0
 	github.com/roadrunner-server/config/v5 v5.1.0
 	github.com/roadrunner-server/endure/v2 v2.6.1
 	github.com/roadrunner-server/goridge/v3 v3.8.3
@@ -60,7 +60,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/nexus-rpc/sdk-go v0.1.0 // indirect
-	github.com/onsi/ginkgo/v2 v2.22.0 // indirect
+	github.com/onsi/ginkgo/v2 v2.22.1 // indirect
 	github.com/openzipkin/zipkin-go v0.4.3 // indirect
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
