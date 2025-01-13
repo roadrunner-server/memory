@@ -150,8 +150,8 @@ github.com/roadrunner-server/events v1.0.1 h1:waCkKhxhzdK3VcI1xG22l+h+0J+Nfdpxjh
 github.com/roadrunner-server/events v1.0.1/go.mod h1:WZRqoEVaFm209t52EuoT7ISUtvX6BrCi6bI/7pjkVC0=
 github.com/roadrunner-server/goridge/v3 v3.8.3 h1:XmjrOFnI6ZbQTPaP39DEk8KwLUNTgjluK3pcZaW6ixQ=
 github.com/roadrunner-server/goridge/v3 v3.8.3/go.mod h1:4TZU8zgkKIZCsH51qwGMpvyXCT59u/8z6q8sCe4ZGAQ=
-github.com/roadrunner-server/http/v5 v5.1.1 h1:eEtVyNOBzlugPdR+VfwmP+3otzIQG9x0TE7QizdUedI=
-github.com/roadrunner-server/http/v5 v5.1.1/go.mod h1:KMUY0AB9Kczu8fgy3N/kgNFK3oaWfNq4PTFYuB2kr10=
+github.com/roadrunner-server/http/v5 v5.2.0 h1:m2bHHaYYmT/QKOXR2yR9fedsn3qRhZHtMm3dBrw/zCo=
+github.com/roadrunner-server/http/v5 v5.2.0/go.mod h1:PJd/IK9AG7VvU+JH0rt9UqDcHKjEPTJAMOjIrDxW2Lc=
 github.com/roadrunner-server/informer/v5 v5.1.1 h1:BQ0lmXozcaifENKdla+QLkSXjGXD/mnQC6SMsXEEUl0=
 github.com/roadrunner-server/informer/v5 v5.1.1/go.mod h1:Him0N4O8chDBMrbMlPD9u+dL3u/+HNATfw3ITP8uoXc=
 github.com/roadrunner-server/jobs/v5 v5.1.1 h1:Cm5m/IM3NpSekJtD5BJyN5vDOJi3F+nRp8OomdxMUu8=
