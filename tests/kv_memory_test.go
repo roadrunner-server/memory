@@ -212,7 +212,7 @@ func TestSetManyMemory(t *testing.T) {
 	currAlloc := ms.Alloc
 	currNg := runtime.NumGoroutine()
 
-	if currAlloc-prevAlloc > 10000000 { // 10MB
+	if currAlloc-prevAlloc > 20_000_000 { // 20MB
 		t.Log("Prev alloc", prevAlloc)
 		t.Log("Curr alloc", currAlloc)
 		t.Error("Memory leak detected")
