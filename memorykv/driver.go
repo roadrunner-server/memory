@@ -119,7 +119,7 @@ func (d *Driver) MGet(keys ...string) (map[string][]byte, error) {
 
 	m := make(map[string][]byte, len(keys))
 
-	for i := 0; i < len(keys); i++ {
+	for i := range keys {
 		if value, ok := d.heap.Get(keys[i]); ok {
 			m[keys[i]] = value.Value()
 		}
@@ -221,11 +221,7 @@ func (d *Driver) MExpire(items ...kv.Item) error {
 			return errors.E(op, err)
 		}
 
-		ttm := int(tm.UTC().Sub(time.Now().UTC()).Seconds())
-		if ttm < 0 {
-			// we're in the future, delete the item
-			ttm = 0
-		}
+		ttm := max(int(tm.UTC().Sub(time.Now().UTC()).Seconds()), 0)
 
 		// check if the key exists and has a callback
 		if clb, ok := d.heap.Get(items[i].Key()); ok && clb.callback != nil {
