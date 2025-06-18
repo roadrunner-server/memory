@@ -8,19 +8,19 @@ require (
 	github.com/goccy/go-json v0.10.5
 	github.com/google/uuid v1.6.0
 	github.com/roadrunner-server/api/v4 v4.20.0
-	github.com/roadrunner-server/config/v5 v5.1.7
+	github.com/roadrunner-server/config/v5 v5.1.8
 	github.com/roadrunner-server/endure/v2 v2.6.2
 	github.com/roadrunner-server/goridge/v3 v3.8.3
-	github.com/roadrunner-server/http/v5 v5.2.6
-	github.com/roadrunner-server/informer/v5 v5.1.7
-	github.com/roadrunner-server/jobs/v5 v5.1.7
-	github.com/roadrunner-server/kv/v5 v5.2.7
-	github.com/roadrunner-server/logger/v5 v5.1.7
+	github.com/roadrunner-server/http/v5 v5.2.7
+	github.com/roadrunner-server/informer/v5 v5.1.8
+	github.com/roadrunner-server/jobs/v5 v5.1.8
+	github.com/roadrunner-server/kv/v5 v5.2.8
+	github.com/roadrunner-server/logger/v5 v5.1.8
 	github.com/roadrunner-server/memory/v5 v5.0.0
-	github.com/roadrunner-server/otel/v5 v5.1.7
-	github.com/roadrunner-server/resetter/v5 v5.1.7
-	github.com/roadrunner-server/rpc/v5 v5.1.7
-	github.com/roadrunner-server/server/v5 v5.2.8
+	github.com/roadrunner-server/otel/v5 v5.1.8
+	github.com/roadrunner-server/resetter/v5 v5.1.8
+	github.com/roadrunner-server/rpc/v5 v5.1.8
+	github.com/roadrunner-server/server/v5 v5.2.9
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/genproto v0.0.0-20250603155806-513f23925822
@@ -43,12 +43,12 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/pprof v0.0.0-20250607225305-033d6d78b36a // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.0 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/libdns/libdns v1.1.0 // indirect
@@ -73,7 +73,7 @@ require (
 	github.com/roadrunner-server/errors v1.4.1 // indirect
 	github.com/roadrunner-server/events v1.0.1 // indirect
 	github.com/roadrunner-server/pool v1.1.3 // indirect
-	github.com/roadrunner-server/priority_queue v1.0.4 // indirect
+	github.com/roadrunner-server/priority_queue v1.0.5 // indirect
 	github.com/roadrunner-server/tcplisten v1.5.2 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/sagikazarmark/locafero v0.9.0 // indirect
