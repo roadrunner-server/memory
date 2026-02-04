@@ -11,19 +11,19 @@ require (
 	github.com/roadrunner-server/config/v5 v5.1.9
 	github.com/roadrunner-server/endure/v2 v2.6.2
 	github.com/roadrunner-server/goridge/v3 v3.8.3
-	github.com/roadrunner-server/http/v5 v5.2.8
+	github.com/roadrunner-server/http/v5 v5.3.0
 	github.com/roadrunner-server/informer/v5 v5.1.9
 	github.com/roadrunner-server/jobs/v5 v5.1.9
 	github.com/roadrunner-server/kv/v5 v5.2.9
 	github.com/roadrunner-server/logger/v5 v5.1.9
 	github.com/roadrunner-server/memory/v5 v5.2.9
-	github.com/roadrunner-server/otel/v5 v5.3.1
+	github.com/roadrunner-server/otel/v5 v5.4.0
 	github.com/roadrunner-server/resetter/v5 v5.1.9
 	github.com/roadrunner-server/rpc/v5 v5.1.9
 	github.com/roadrunner-server/server/v5 v5.2.10
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.1
-	google.golang.org/genproto v0.0.0-20260202165425-ce8ad4cf556b
+	google.golang.org/genproto v0.0.0-20260203192932-546029d2fa20
 )
 
 replace github.com/roadrunner-server/memory/v5 => ../
@@ -116,8 +116,8 @@ require (
 	golang.org/x/text v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260202165425-ce8ad4cf556b // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260202165425-ce8ad4cf556b // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260203192932-546029d2fa20 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260203192932-546029d2fa20 // indirect
 	google.golang.org/grpc v1.78.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
