@@ -12,7 +12,7 @@ require (
 	github.com/roadrunner-server/http/v5 v5.3.0
 	github.com/roadrunner-server/informer/v5 v5.1.9
 	github.com/roadrunner-server/jobs/v6 v6.0.0-beta.1
-	github.com/roadrunner-server/kv/v5 v5.2.9
+	github.com/roadrunner-server/kv/v6 v6.0.0-beta.1
 	github.com/roadrunner-server/logger/v5 v5.1.9
 	github.com/roadrunner-server/memory/v6 v6.0.0-beta.1
 	github.com/roadrunner-server/resetter/v5 v5.1.9

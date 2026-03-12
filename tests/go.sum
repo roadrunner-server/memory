@@ -104,8 +104,8 @@ github.com/roadrunner-server/informer/v5 v5.1.9 h1:yl334LMqUoWXfeP4299HgY9G7mq6k
 github.com/roadrunner-server/informer/v5 v5.1.9/go.mod h1:JPzSsDjLHExdQ9SbT9e8H/oB7pajgCScL/G70saQzSA=
 github.com/roadrunner-server/jobs/v6 v6.0.0-beta.1 h1:2QhycjtViHajTXjOC9cRJbYmFUwn+SgAvFpYvF0Q1uw=
 github.com/roadrunner-server/jobs/v6 v6.0.0-beta.1/go.mod h1:aYZ0GedmEcKjsd1dmAQroZrYDQp1jm9iU4ncI6fe+8g=
-github.com/roadrunner-server/kv/v5 v5.2.9 h1:vVUwmt2lxvdf6pILvfOFj57htFBedgQT8jnnwmI7pKU=
-github.com/roadrunner-server/kv/v5 v5.2.9/go.mod h1:KibOhjOyOk+3ULzPhEEisCmCQQjFxVu5fXJGSVbsJUU=
+github.com/roadrunner-server/kv/v6 v6.0.0-beta.1 h1:BqoEoh6Ma/qp0N2PwuWhXjRUTmdnPkLxtSCIuAlpnIU=
+github.com/roadrunner-server/kv/v6 v6.0.0-beta.1/go.mod h1:H+udc6Oji6pcdUBloXOWNFY5L5rTaP0yqwL1DR+3zCU=
 github.com/roadrunner-server/logger/v5 v5.1.9 h1:3Kn+NYXF7Ww5LvkwMZwkv1q99t5qusIPBsreRJL08JI=
 github.com/roadrunner-server/logger/v5 v5.1.9/go.mod h1:hwct/TWTmxYsVzowLx4g9HkY5z2/gpYOC+UN8btsrAA=
 github.com/roadrunner-server/pool v1.1.3 h1:KMsiL6yuYBWGk73bdO0akwP+fJ63bxDF972JukCGsxI=
