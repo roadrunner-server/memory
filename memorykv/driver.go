@@ -3,11 +3,10 @@ package memorykv
 import (
 	"context"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api/v4/plugins/v1/kv"
+	"github.com/roadrunner-server/api-plugins/v6/kv"
 	"github.com/roadrunner-server/errors"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
@@ -24,7 +23,6 @@ type cb struct {
 
 type Driver struct {
 	heap            *hmap
-	mu              *sync.Mutex
 	broadcastStopCh atomic.Pointer[chan struct{}]
 
 	tracer *sdktrace.TracerProvider
@@ -37,7 +35,6 @@ func NewInMemoryDriver(log *zap.Logger, tracer *sdktrace.TracerProvider) *Driver
 	}
 
 	d := &Driver{
-		mu:     &sync.Mutex{},
 		heap:   newHMap(),
 		log:    log,
 		tracer: tracer,
@@ -49,10 +46,10 @@ func NewInMemoryDriver(log *zap.Logger, tracer *sdktrace.TracerProvider) *Driver
 	return d
 }
 
-func (d *Driver) Has(keys ...string) (map[string]bool, error) {
+func (d *Driver) Has(ctx context.Context, keys ...string) (map[string]bool, error) {
 	const op = errors.Op("in_memory_plugin_has")
 
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:has")
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:has")
 	defer span.End()
 
 	if keys == nil {
@@ -60,11 +57,9 @@ func (d *Driver) Has(keys ...string) (map[string]bool, error) {
 		return nil, errors.E(op, errors.NoKeys)
 	}
 
-	// todo(rustatian): move this map to a sync.Pool?
-	m := make(map[string]bool)
+	m := make(map[string]bool, len(keys))
 	for i := range keys {
-		keyTrimmed := strings.TrimSpace(keys[i])
-		if keyTrimmed == "" {
+		if strings.TrimSpace(keys[i]) == "" {
 			return nil, errors.E(op, errors.EmptyKey)
 		}
 
@@ -76,13 +71,12 @@ func (d *Driver) Has(keys ...string) (map[string]bool, error) {
 	return m, nil
 }
 
-func (d *Driver) Get(key string) ([]byte, error) {
+func (d *Driver) Get(ctx context.Context, key string) ([]byte, error) {
 	const op = errors.Op("in_memory_plugin_get")
 
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:get")
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:get")
 	defer span.End()
 
-	// to get cases like "  "
 	keyTrimmed := strings.TrimSpace(key)
 	if keyTrimmed == "" {
 		span.RecordError(errors.Str("empty key"))
@@ -90,17 +84,15 @@ func (d *Driver) Get(key string) ([]byte, error) {
 	}
 
 	if data, exist := d.heap.Get(key); exist {
-		// here might be a panic
-		// but data only could be a string, see Set function
 		return data.Value(), nil
 	}
 
 	return nil, nil
 }
 
-func (d *Driver) MGet(keys ...string) (map[string][]byte, error) {
+func (d *Driver) MGet(ctx context.Context, keys ...string) (map[string][]byte, error) {
 	const op = errors.Op("in_memory_plugin_mget")
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:mget")
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:mget")
 	defer span.End()
 
 	if keys == nil {
@@ -108,18 +100,13 @@ func (d *Driver) MGet(keys ...string) (map[string][]byte, error) {
 		return nil, errors.E(op, errors.NoKeys)
 	}
 
-	// should not be empty keys
+	m := make(map[string][]byte, len(keys))
 	for i := range keys {
-		keyTrimmed := strings.TrimSpace(keys[i])
-		if keyTrimmed == "" {
+		if strings.TrimSpace(keys[i]) == "" {
 			span.RecordError(errors.Str("empty key"))
 			return nil, errors.E(op, errors.EmptyKey)
 		}
-	}
 
-	m := make(map[string][]byte, len(keys))
-
-	for i := range keys {
 		if value, ok := d.heap.Get(keys[i]); ok {
 			m[keys[i]] = value.Value()
 		}
@@ -128,9 +115,9 @@ func (d *Driver) MGet(keys ...string) (map[string][]byte, error) {
 	return m, nil
 }
 
-func (d *Driver) Set(items ...kv.Item) error {
+func (d *Driver) Set(ctx context.Context, items ...kv.Item) error {
 	const op = errors.Op("in_memory_plugin_set")
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:set")
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:set")
 	defer span.End()
 
 	if items == nil {
@@ -146,11 +133,8 @@ func (d *Driver) Set(items ...kv.Item) error {
 		// check for the duplicates
 		d.heap.Delete(items[i].Key())
 
-		// at this point the duplicate key is removed
-
 		// TTL is set
 		if items[i].Timeout() != "" {
-			// check the TTL in the item
 			tt, err := time.Parse(time.RFC3339, items[i].Timeout())
 			if err != nil {
 				span.RecordError(err)
@@ -158,10 +142,8 @@ func (d *Driver) Set(items ...kv.Item) error {
 			}
 
 			tm := int(tt.UTC().Sub(time.Now().UTC()).Seconds())
-			// we already in the future :)
 			if tm <= 0 {
 				d.log.Warn("incorrect TTL time, saving without it", zap.String("key", items[i].Key()))
-				// set item
 				d.heap.Set(items[i].Key(), &Item{
 					key:   items[i].Key(),
 					value: items[i].Value(),
@@ -169,9 +151,6 @@ func (d *Driver) Set(items ...kv.Item) error {
 				continue
 			}
 
-			// at this point, we have valid TTL and should save the item with the callback
-
-			// create callback to delete the key from the heap
 			stopCh, updateCh := d.ttlcallback(items[i].Key(), tm, *d.broadcastStopCh.Load())
 
 			d.log.Debug("saving item with TTL", zap.String("key", items[i].Key()), zap.String("ttl", items[i].Timeout()))
@@ -185,7 +164,6 @@ func (d *Driver) Set(items ...kv.Item) error {
 				},
 			})
 		} else {
-			// set item without TTL
 			d.log.Debug("saving item without TTL", zap.String("key", items[i].Key()))
 			d.heap.Set(items[i].Key(), &Item{
 				key:   items[i].Key(),
@@ -199,9 +177,9 @@ func (d *Driver) Set(items ...kv.Item) error {
 
 // MExpire sets the expiration time to the key
 // If key already has the expiration time, it will be overwritten
-func (d *Driver) MExpire(items ...kv.Item) error {
+func (d *Driver) MExpire(ctx context.Context, items ...kv.Item) error {
 	const op = errors.Op("in_memory_plugin_mexpire")
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:mexpire")
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:mexpire")
 	defer span.End()
 
 	for i := range items {
@@ -214,7 +192,6 @@ func (d *Driver) MExpire(items ...kv.Item) error {
 			return errors.E(op, errors.Str("timeout for MExpire is empty or key is empty"))
 		}
 
-		// check if the time is correct
 		tm, err := time.Parse(time.RFC3339, items[i].Timeout())
 		if err != nil {
 			span.RecordError(err)
@@ -223,18 +200,11 @@ func (d *Driver) MExpire(items ...kv.Item) error {
 
 		ttm := max(int(tm.UTC().Sub(time.Now().UTC()).Seconds()), 0)
 
-		// check if the key exists and has a callback
 		if clb, ok := d.heap.Get(items[i].Key()); ok && clb.callback != nil {
-			// send new ttl to the callback
 			clb.callback.updateCh <- ttm
-			// if not -> set the callback
 		} else {
-			// we should set the callback
-			// create callback to delete the key from the heap
 			stopCh, updateCh := d.ttlcallback(items[i].Key(), ttm, *d.broadcastStopCh.Load())
-			// just to be sure
 			d.heap.removeEntry(items[i].Key())
-			// set the item with the callback
 			d.heap.Set(items[i].Key(), &Item{
 				key:     items[i].Key(),
 				value:   items[i].Value(),
@@ -250,9 +220,9 @@ func (d *Driver) MExpire(items ...kv.Item) error {
 	return nil
 }
 
-func (d *Driver) TTL(keys ...string) (map[string]string, error) {
+func (d *Driver) TTL(ctx context.Context, keys ...string) (map[string]string, error) {
 	const op = errors.Op("in_memory_plugin_ttl")
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:ttl")
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:ttl")
 	defer span.End()
 
 	if keys == nil {
@@ -260,18 +230,13 @@ func (d *Driver) TTL(keys ...string) (map[string]string, error) {
 		return nil, errors.E(op, errors.NoKeys)
 	}
 
-	// should not be empty keys
+	m := make(map[string]string, len(keys))
 	for i := range keys {
-		keyTrimmed := strings.TrimSpace(keys[i])
-		if keyTrimmed == "" {
+		if strings.TrimSpace(keys[i]) == "" {
 			span.RecordError(errors.Str("empty key"))
 			return nil, errors.E(op, errors.EmptyKey)
 		}
-	}
 
-	m := make(map[string]string, len(keys))
-
-	for i := range keys {
 		if item, ok := d.heap.Get(keys[i]); ok {
 			m[keys[i]] = item.Timeout()
 		}
@@ -280,20 +245,18 @@ func (d *Driver) TTL(keys ...string) (map[string]string, error) {
 	return m, nil
 }
 
-func (d *Driver) Delete(keys ...string) error {
+func (d *Driver) Delete(ctx context.Context, keys ...string) error {
 	const op = errors.Op("in_memory_plugin_delete")
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:delete")
-
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:delete")
 	defer span.End()
+
 	if keys == nil {
 		span.RecordError(errors.Str("no keys provided"))
 		return errors.E(op, errors.NoKeys)
 	}
 
-	// should not be empty keys
 	for i := range keys {
-		keyTrimmed := strings.TrimSpace(keys[i])
-		if keyTrimmed == "" {
+		if strings.TrimSpace(keys[i]) == "" {
 			span.RecordError(errors.Str("empty key"))
 			return errors.E(op, errors.EmptyKey)
 		}
@@ -301,20 +264,15 @@ func (d *Driver) Delete(keys ...string) error {
 
 	for i := range keys {
 		k, ok := d.heap.LoadAndDelete(keys[i])
-		if ok {
-			if k.callback != nil {
-				// send signal to stop the timer and delete the item
-				k.callback.stopCh <- struct{}{}
-			}
+		if ok && k.callback != nil {
+			k.callback.stopCh <- struct{}{}
 		}
 	}
 
 	return nil
 }
 
-func (d *Driver) Clear() error {
-	_, span := d.tracer.Tracer(tracerName).Start(context.Background(), "inmemory:clear")
-	defer span.End()
+func (d *Driver) Clear(_ context.Context) error {
 	// stop all callbacks
 	close(*d.broadcastStopCh.Load())
 
@@ -325,7 +283,7 @@ func (d *Driver) Clear() error {
 	return nil
 }
 
-func (d *Driver) Stop() {
+func (d *Driver) Stop(_ context.Context) {
 	close(*d.broadcastStopCh.Load())
 }
 
@@ -336,7 +294,6 @@ func (d *Driver) ttlcallback(id string, ttl int, sCh <-chan struct{}) (chan stru
 	updateTTLCh := make(chan int, 1)
 
 	go func(hid string) {
-		// ttl
 		cbttl := ttl
 		ta := time.NewTicker(time.Second * time.Duration(cbttl))
 		for {
@@ -347,33 +304,27 @@ func (d *Driver) ttlcallback(id string, ttl int, sCh <-chan struct{}) (chan stru
 					zap.Int("ttl seconds", cbttl),
 				)
 				ta.Stop()
-				// removeEntry removes the entry w/o checking callback
 				d.heap.removeEntry(hid)
 				return
 			case <-sCh:
-				// broadcast stop channel
 				d.log.Debug("ttl removed, broadcast call",
 					zap.String("id", hid),
 					zap.Int("ttl seconds", cbttl),
 				)
 				ta.Stop()
-				// removeEntry removes the entry w/o checking callback
 				d.heap.removeEntry(hid)
 				return
 			case <-stopCbCh:
-				// item stop channel
 				d.log.Debug("ttl removed, callback call",
 					zap.String("id", hid),
 					zap.Int("ttl seconds", cbttl),
 				)
 				return
 			case newTTL := <-updateTTLCh:
-				// in case of TTL we don't need to remove the item, only update TTL
 				d.log.Debug("updating ttl",
 					zap.String("id", hid),
 					zap.Int("prev_ttl", cbttl),
 					zap.Int("new_ttl", newTTL))
-				// update callback TTL (for logs)
 				cbttl = newTTL
 				ta.Reset(time.Second * time.Duration(newTTL))
 			}

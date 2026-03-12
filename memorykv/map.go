@@ -52,20 +52,16 @@ func (h *hmap) Clean() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for k, v := range h.items {
-		if v != nil {
-			if v.callback != nil {
-				select {
-				case v.callback.stopCh <- struct{}{}:
-				default:
-				}
+	for _, v := range h.items {
+		if v != nil && v.callback != nil {
+			select {
+			case v.callback.stopCh <- struct{}{}:
+			default:
 			}
 		}
-
-		delete(h.items, k)
 	}
 
-	h.items = make(map[string]*Item, 10)
+	clear(h.items)
 }
 
 func (h *hmap) Delete(key string) {

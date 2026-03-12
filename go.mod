@@ -1,12 +1,9 @@
-module github.com/roadrunner-server/memory/v5
+module github.com/roadrunner-server/memory/v6
 
 go 1.26
 
-toolchain go1.26.0
-
 require (
-	github.com/goccy/go-json v0.10.5
-	github.com/roadrunner-server/api/v4 v4.23.0
+	github.com/roadrunner-server/api-plugins/v6 v6.0.0-beta.1
 	github.com/roadrunner-server/endure/v2 v2.6.2
 	github.com/roadrunner-server/errors v1.4.1
 	go.opentelemetry.io/contrib/propagators/jaeger v1.42.0
