@@ -12,15 +12,14 @@ import (
 	"testing"
 	"time"
 
-	kvProto "github.com/roadrunner-server/api/v4/build/kv/v1"
+	kvProto "github.com/roadrunner-server/api-go/v6/kv/v1"
 	"github.com/roadrunner-server/config/v5"
 	"github.com/roadrunner-server/endure/v2"
-	goridgeRpc "github.com/roadrunner-server/goridge/v3/pkg/rpc"
+	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	"github.com/roadrunner-server/http/v5"
 	"github.com/roadrunner-server/kv/v5"
 	"github.com/roadrunner-server/logger/v5"
-	"github.com/roadrunner-server/memory/v5"
-	"github.com/roadrunner-server/otel/v5"
+	"github.com/roadrunner-server/memory/v6"
 	rpcPlugin "github.com/roadrunner-server/rpc/v5"
 	"github.com/roadrunner-server/server/v5"
 	"github.com/stretchr/testify/assert"
@@ -58,12 +57,9 @@ func TestInMemoryOrder(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -87,7 +83,7 @@ func TestInMemoryOrder(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 1)
 	stopCh <- struct{}{}
@@ -110,7 +106,6 @@ func TestSetManyMemory(t *testing.T) {
 		cfg,
 		&kv.Plugin{},
 		&memory.Plugin{},
-		&otel.Plugin{},
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
 	)
@@ -128,12 +123,9 @@ func TestSetManyMemory(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -157,7 +149,7 @@ func TestSetManyMemory(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 1)
 
@@ -166,7 +158,7 @@ func TestSetManyMemory(t *testing.T) {
 	prevAlloc := ms.Alloc
 	ngprev := runtime.NumGoroutine()
 
-	conn, err := net.Dial("tcp", "127.0.0.1:6666")
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:6666")
 	assert.NoError(t, err)
 	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 	defer func() {
@@ -201,7 +193,7 @@ func TestSetManyMemory(t *testing.T) {
 	}
 
 	ret := &kvProto.Response{}
-	for i := 0; i < 10000; i++ {
+	for range 10_000 {
 		err = client.Call("kv.Set", data, ret)
 		require.NoError(t, err)
 	}
@@ -245,7 +237,6 @@ func TestInMemory(t *testing.T) {
 		cfg,
 		&kv.Plugin{},
 		&memory.Plugin{},
-		&otel.Plugin{},
 		&rpcPlugin.Plugin{},
 		&logger.Plugin{},
 	)
@@ -263,12 +254,9 @@ func TestInMemory(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -292,7 +280,7 @@ func TestInMemory(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 1)
 	t.Run("INMEMORY", testRPCMethodsInMemory)
@@ -301,7 +289,7 @@ func TestInMemory(t *testing.T) {
 }
 
 func testRPCMethodsInMemory(t *testing.T) {
-	conn, err := net.Dial("tcp", "127.0.0.1:6001")
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:6001")
 	assert.NoError(t, err)
 	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 

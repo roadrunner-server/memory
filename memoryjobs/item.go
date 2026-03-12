@@ -7,8 +7,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/goccy/go-json"
-	"github.com/roadrunner-server/api/v4/plugins/v4/jobs"
+	"encoding/json"
+
+	"github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/errors"
 )
 
@@ -24,7 +25,7 @@ type Item struct {
 	// Headers with key-values pairs
 	headers map[string][]string
 	// Options contain a set of PipelineOptions specific to job execution. Can be empty.
-	Options *Options `json:"options,omitempty"`
+	Options *Options `json:"options,omitzero"`
 }
 
 // Options carry information about how to handle a given job.
@@ -34,17 +35,17 @@ type Options struct {
 	Priority int64 `json:"priority"`
 
 	// Pipeline manually specified pipeline.
-	Pipeline string `json:"pipeline,omitempty"`
+	Pipeline string `json:"pipeline,omitzero"`
 
 	// Delay defines time duration to delay execution for. Defaults to none.
-	Delay int `json:"delay,omitempty"`
+	Delay int `json:"delay,omitzero"`
 
 	// private
-	stopped     *uint64
+	stopped     *atomic.Bool
 	requeueFn   func(context.Context, *Item) error
 	cond        *sync.Cond
-	msgInFlight *int64
-	delayed     *int64
+	msgInFlight *atomic.Int64
+	delayed     *atomic.Int64
 }
 
 // DelayDuration returns delay duration in the form of time.Duration.
@@ -71,7 +72,7 @@ func (i *Item) Body() []byte {
 
 // Context packs job context (job, id) into binary payload.
 func (i *Item) Context() ([]byte, error) {
-	ctx, err := json.Marshal(
+	return json.Marshal(
 		struct {
 			ID       string              `json:"id"`
 			Job      string              `json:"job"`
@@ -86,12 +87,6 @@ func (i *Item) Context() ([]byte, error) {
 			Pipeline: i.Options.Pipeline,
 		},
 	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return ctx, nil
 }
 
 func (i *Item) Headers() map[string][]string {
@@ -99,9 +94,8 @@ func (i *Item) Headers() map[string][]string {
 }
 
 func (i *Item) Ack() error {
-	// reduce the number of the all active jobs
 	i.atomicallyReduceCount()
-	if atomic.LoadUint64(i.Options.stopped) == 1 {
+	if i.Options.stopped.Load() {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
 	return nil
@@ -109,18 +103,13 @@ func (i *Item) Ack() error {
 
 func (i *Item) NackWithOptions(redeliver bool, delay int) error {
 	i.atomicallyReduceCount()
-	if atomic.LoadUint64(i.Options.stopped) == 1 {
+	if i.Options.stopped.Load() {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
 
 	if redeliver {
 		i.Options.Delay = delay
-		err := i.Options.requeueFn(context.Background(), i)
-		if err != nil {
-			return err
-		}
-
-		return nil
+		return i.Options.requeueFn(context.Background(), i)
 	}
 
 	return nil
@@ -128,7 +117,7 @@ func (i *Item) NackWithOptions(redeliver bool, delay int) error {
 
 func (i *Item) Nack() error {
 	i.atomicallyReduceCount()
-	if atomic.LoadUint64(i.Options.stopped) == 1 {
+	if i.Options.stopped.Load() {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
 	return nil
@@ -136,19 +125,13 @@ func (i *Item) Nack() error {
 
 func (i *Item) Requeue(headers map[string][]string, delay int) error {
 	i.atomicallyReduceCount()
-	if atomic.LoadUint64(i.Options.stopped) == 1 {
+	if i.Options.stopped.Load() {
 		return errors.Str("failed to acknowledge the JOB, the pipeline is probably stopped")
 	}
-	// overwrite the delay
 	i.Options.Delay = delay
 	maps.Copy(i.headers, headers)
 
-	err := i.Options.requeueFn(context.Background(), i)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return i.Options.requeueFn(context.Background(), i)
 }
 
 // Respond for the in-memory is no-op
@@ -158,13 +141,10 @@ func (i *Item) Respond([]byte, string) error {
 
 // atomicallyReduceCount reduces counter of active or delayed jobs
 func (i *Item) atomicallyReduceCount() {
-	// reduce number of the all active jobs
-	atomic.AddInt64(i.Options.msgInFlight, ^int64(0))
-	// pass 1 job
+	i.Options.msgInFlight.Add(-1)
 	i.Options.cond.Signal()
-	// if job was delayed, reduce number of the delayed jobs
 	if i.Options.Delay > 0 {
-		atomic.AddInt64(i.Options.delayed, ^int64(0))
+		i.Options.delayed.Add(-1)
 	}
 }
 
