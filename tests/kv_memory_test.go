@@ -2,11 +2,13 @@ package memory
 
 import (
 	"log/slog"
+	"maps"
 	"net"
 	"net/rpc"
 	"os"
 	"os/signal"
 	"runtime"
+	"slices"
 	"sync"
 	"syscall"
 	"testing"
@@ -24,7 +26,26 @@ import (
 	"github.com/roadrunner-server/server/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
+
+type kvInMemoryTracer struct {
+	tp  *sdktrace.TracerProvider
+	exp *tracetest.InMemoryExporter
+}
+
+func newKVInMemoryTracer(t *testing.T) *kvInMemoryTracer {
+	t.Helper()
+	exp := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
+	t.Cleanup(func() { _ = tp.Shutdown(t.Context()) })
+	return &kvInMemoryTracer{tp: tp, exp: exp}
+}
+
+func (m *kvInMemoryTracer) Init() error                      { return nil }
+func (m *kvInMemoryTracer) Name() string                     { return "kvInMemoryTracer" }
+func (m *kvInMemoryTracer) Tracer() *sdktrace.TracerProvider { return m.tp }
 
 func TestInMemoryOrder(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
@@ -482,4 +503,155 @@ func testRPCMethodsInMemory(t *testing.T) {
 
 	err = client.Call("kv.Clear", data, ret)
 	require.NoError(t, err)
+}
+
+func TestInMemoryKVTracer(t *testing.T) {
+	cont := endure.New(slog.LevelDebug)
+
+	cfg := &config.Plugin{
+		Version: "2023.3.0",
+		Path:    "configs/.rr-in-memory.yaml",
+	}
+
+	tracer := newKVInMemoryTracer(t)
+	err := cont.RegisterAll(
+		cfg,
+		&kv.Plugin{},
+		&memory.Plugin{},
+		tracer,
+		&rpcPlugin.Plugin{},
+		&logger.Plugin{},
+	)
+	assert.NoError(t, err)
+
+	err = cont.Init()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ch, err := cont.Serve()
+	assert.NoError(t, err)
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
+
+	wg := &sync.WaitGroup{}
+	stopCh := make(chan struct{}, 1)
+
+	wg.Go(func() {
+		for {
+			select {
+			case e := <-ch:
+				assert.Fail(t, "error", e.Error.Error())
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+			case <-sig:
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+				return
+			case <-stopCh:
+				err = cont.Stop()
+				if err != nil {
+					assert.FailNow(t, "error", err.Error())
+				}
+				return
+			}
+		}
+	})
+
+	time.Sleep(time.Second)
+
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:6001")
+	assert.NoError(t, err)
+	client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
+
+	tt := time.Now().Add(time.Second * 30).Format(time.RFC3339)
+
+	// SET
+	data := &kvProto.Request{
+		Storage: "memory-rr",
+		Items: []*kvProto.Item{
+			{Key: "a", Value: []byte("aa"), Timeout: tt},
+			{Key: "b", Value: []byte("bb")},
+		},
+	}
+	ret := &kvProto.Response{}
+	err = client.Call("kv.Set", data, ret)
+	assert.NoError(t, err)
+
+	// HAS
+	keys := &kvProto.Request{
+		Storage: "memory-rr",
+		Items:   []*kvProto.Item{{Key: "a"}, {Key: "b"}},
+	}
+	ret = &kvProto.Response{}
+	err = client.Call("kv.Has", keys, ret)
+	assert.NoError(t, err)
+	assert.Len(t, ret.GetItems(), 2)
+
+	// MGET
+	ret = &kvProto.Response{}
+	err = client.Call("kv.MGet", keys, ret)
+	assert.NoError(t, err)
+	assert.Len(t, ret.GetItems(), 2)
+
+	// TTL
+	ret = &kvProto.Response{}
+	err = client.Call("kv.TTL", &kvProto.Request{
+		Storage: "memory-rr",
+		Items:   []*kvProto.Item{{Key: "a"}},
+	}, ret)
+	assert.NoError(t, err)
+	assert.Len(t, ret.GetItems(), 1)
+
+	// MEXPIRE
+	tt2 := time.Now().Add(time.Second * 60).Format(time.RFC3339)
+	ret = &kvProto.Response{}
+	err = client.Call("kv.MExpire", &kvProto.Request{
+		Storage: "memory-rr",
+		Items:   []*kvProto.Item{{Key: "b", Timeout: tt2}},
+	}, ret)
+	assert.NoError(t, err)
+
+	// DELETE
+	ret = &kvProto.Response{}
+	err = client.Call("kv.Delete", &kvProto.Request{
+		Storage: "memory-rr",
+		Items:   []*kvProto.Item{{Key: "b"}},
+	}, ret)
+	assert.NoError(t, err)
+
+	// CLEAR
+	ret = &kvProto.Response{}
+	err = client.Call("kv.Clear", &kvProto.Request{Storage: "memory-rr"}, ret)
+	assert.NoError(t, err)
+
+	_ = client.Close()
+
+	stopCh <- struct{}{}
+	wg.Wait()
+
+	// Verify spans
+	spans := tracer.exp.GetSpans()
+	spanNames := make(map[string]struct{}, len(spans))
+	for _, s := range spans {
+		spanNames[s.Name] = struct{}{}
+	}
+
+	uniqueNames := slices.Sorted(maps.Keys(spanNames))
+
+	expected := []string{
+		"inmemory:delete",
+		"inmemory:has",
+		"inmemory:mexpire",
+		"inmemory:mget",
+		"inmemory:set",
+		"inmemory:ttl",
+	}
+
+	assert.Equal(t, expected, uniqueNames)
 }
