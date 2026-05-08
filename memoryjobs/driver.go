@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/roadrunner-server/api/v4/plugins/v4/jobs"
+	"github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/errors"
 	jprop "go.opentelemetry.io/contrib/propagators/jaeger"
 	"go.opentelemetry.io/otel"
@@ -22,7 +22,6 @@ const (
 	prefetch      string = "prefetch"
 	goroutinesMax uint64 = 1000
 
-	// v2023.1 OTEL
 	tracerName string = "jobs"
 )
 
@@ -43,12 +42,9 @@ type Config struct {
 type Driver struct {
 	cfg *Config
 
-	// delayed messages
-	delayed *int64
-	// currently processing
-	msgInFlight *int64
-	// prefetch
-	msgInFlightLimit *int64
+	delayed          atomic.Int64
+	msgInFlight      atomic.Int64
+	msgInFlightLimit atomic.Int64
 	cond             sync.Cond
 
 	tracer     *sdktrace.TracerProvider
@@ -59,23 +55,22 @@ type Driver struct {
 
 	prop propagation.TextMapPropagator
 
-	// time.sleep goroutines max number
-	goroutines uint64
+	goroutines atomic.Uint64
 
 	priority  int64
-	listeners uint32
-	stopped   uint64
+	listeners atomic.Bool
+	stopped   atomic.Bool
 	stopCh    chan struct{}
 }
 
-// FromConfig initializes kafka pipeline from the configuration
 func FromConfig(
 	tracer *sdktrace.TracerProvider,
 	configKey string,
 	log *zap.Logger,
 	cfg Configurer,
 	pipeline jobs.Pipeline,
-	pq jobs.Queue) (*Driver, error) {
+	pq jobs.Queue,
+) (*Driver, error) {
 	const op = errors.Op("new_in_memory_pipeline")
 
 	if tracer == nil {
@@ -83,15 +78,11 @@ func FromConfig(
 	}
 
 	jb := &Driver{
-		stopped:     0,
-		tracer:      tracer,
-		cond:        sync.Cond{L: &sync.Mutex{}},
-		log:         log,
-		pq:          pq,
-		goroutines:  0,
-		msgInFlight: toPtr(int64(0)),
-		delayed:     toPtr(int64(0)),
-		stopCh:      make(chan struct{}),
+		tracer: tracer,
+		cond:   sync.Cond{L: &sync.Mutex{}},
+		log:    log,
+		pq:     pq,
+		stopCh: make(chan struct{}),
 	}
 
 	err := cfg.UnmarshalKey(configKey, &jb.cfg)
@@ -107,7 +98,7 @@ func FromConfig(
 		jb.cfg.Prefetch = 100_000
 	}
 
-	jb.msgInFlightLimit = toPtr(jb.cfg.Prefetch)
+	jb.msgInFlightLimit.Store(jb.cfg.Prefetch)
 
 	if jb.cfg.Priority == 0 {
 		jb.cfg.Priority = 10
@@ -116,7 +107,6 @@ func FromConfig(
 	jb.priority = jb.cfg.Priority
 	jb.pipeline.Store(&pipeline)
 
-	// initialize a local queue
 	jb.localQueue = make(chan *Item, 100_000)
 	jb.prop = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}, jprop.Jaeger{})
 	otel.SetTextMapPropagator(jb.prop)
@@ -124,7 +114,6 @@ func FromConfig(
 	return jb, nil
 }
 
-// FromPipeline initializes pipeline on-the-fly
 func FromPipeline(
 	tracer *sdktrace.TracerProvider,
 	pipeline jobs.Pipeline,
@@ -141,20 +130,16 @@ func FromPipeline(
 	}
 
 	dr := &Driver{
-		stopped:          0,
-		tracer:           tracer,
-		log:              log,
-		pq:               pq,
-		cond:             sync.Cond{L: &sync.Mutex{}},
-		localQueue:       make(chan *Item, 100_000),
-		goroutines:       0,
-		msgInFlight:      toPtr(int64(0)),
-		msgInFlightLimit: toPtr(pref),
-		delayed:          toPtr(int64(0)),
-		priority:         pipeline.Priority(),
-		stopCh:           make(chan struct{}),
+		tracer:     tracer,
+		log:        log,
+		pq:         pq,
+		cond:       sync.Cond{L: &sync.Mutex{}},
+		localQueue: make(chan *Item, 100_000),
+		priority:   pipeline.Priority(),
+		stopCh:     make(chan struct{}),
 	}
 
+	dr.msgInFlightLimit.Store(pref)
 	dr.pipeline.Store(&pipeline)
 	dr.prop = propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}, jprop.Jaeger{})
 	otel.SetTextMapPropagator(dr.prop)
@@ -168,18 +153,12 @@ func (c *Driver) Push(ctx context.Context, jb jobs.Message) error {
 	ctx, span := trace.SpanFromContext(ctx).TracerProvider().Tracer(tracerName).Start(ctx, "in_memory_push")
 	defer span.End()
 
-	// check if the pipeline registered
 	pipe := *c.pipeline.Load()
 	if pipe == nil {
 		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.GroupID()))
 	}
 
-	err := c.handleItem(ctx, fromJob(jb))
-	if err != nil {
-		return errors.E(op, err)
-	}
-
-	return nil
+	return errors.E(op, c.handleItem(ctx, fromJob(jb)))
 }
 
 func (c *Driver) State(ctx context.Context) (*jobs.State, error) {
@@ -192,9 +171,9 @@ func (c *Driver) State(ctx context.Context) (*jobs.State, error) {
 		Priority: uint64(pipe.Priority()), //nolint:gosec
 		Driver:   pipe.Driver(),
 		Queue:    pipe.Name(),
-		Active:   atomic.LoadInt64(c.msgInFlight),
-		Delayed:  atomic.LoadInt64(c.delayed),
-		Ready:    ready(atomic.LoadUint32(&c.listeners)),
+		Active:   c.msgInFlight.Load(),
+		Delayed:  c.delayed.Load(),
+		Ready:    c.listeners.Load(),
 	}, nil
 }
 
@@ -205,15 +184,13 @@ func (c *Driver) Run(ctx context.Context, pipe jobs.Pipeline) error {
 
 	t := time.Now().UTC()
 
-	l := atomic.LoadUint32(&c.listeners)
-	// listener already active
-	if l == 1 {
+	if c.listeners.Load() {
 		c.log.Warn("listener already in the active state")
 		return errors.E(op, errors.Str("listener already in the active state"))
 	}
 
 	c.consume()
-	atomic.StoreUint32(&c.listeners, 1)
+	c.listeners.Store(true)
 
 	c.log.Debug("pipeline was started", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(t).String()))
 	return nil
@@ -229,15 +206,12 @@ func (c *Driver) Pause(ctx context.Context, p string) error {
 		return errors.Errorf("no such pipeline: %s", pipe.Name())
 	}
 
-	l := atomic.LoadUint32(&c.listeners)
-	// no active listeners
-	if l == 0 {
+	if !c.listeners.Load() {
 		return errors.Str("no active listeners, nothing to pause")
 	}
 
-	atomic.AddUint32(&c.listeners, ^uint32(0))
+	c.listeners.Store(false)
 
-	// stop the Driver
 	c.stopCh <- struct{}{}
 	c.log.Debug("pipeline was paused", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
 
@@ -253,16 +227,13 @@ func (c *Driver) Resume(ctx context.Context, p string) error {
 		return errors.Errorf("no such pipeline: %s", pipe.Name())
 	}
 
-	l := atomic.LoadUint32(&c.listeners)
-	// listener already active
-	if l == 1 {
+	if c.listeners.Load() {
 		return errors.Str("memory listener is already in the active state")
 	}
 
-	// resume the Driver on the same channel
 	c.consume()
 
-	atomic.StoreUint32(&c.listeners, 1)
+	c.listeners.Store(true)
 	c.log.Debug("pipeline was resumed", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
 
 	return nil
@@ -279,18 +250,13 @@ func (c *Driver) Stop(ctx context.Context) error {
 	select {
 	case c.stopCh <- struct{}{}:
 	default:
-		break
 	}
 
-	// just to be sure, that queue won't block
 	c.cond.Signal()
 
-	// close localQueue channel
 	close(c.localQueue)
-
-	// help GC
 	c.localQueue = nil
-	atomic.StoreUint64(&c.stopped, 1)
+	c.stopped.Store(true)
 
 	c.log.Debug("pipeline was stopped", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
 	return nil
@@ -301,20 +267,16 @@ func (c *Driver) handleItem(ctx context.Context, msg *Item) error {
 
 	c.prop.Inject(ctx, propagation.HeaderCarrier(msg.headers))
 
-	// handle timeouts
-	// theoretically, some bad user may send millions requests with a delay and produce a billion (for example)
-	// goroutines here. We should limit goroutines here.
 	if msg.Options.Delay > 0 {
-		// if we have 1000 goroutines waiting on the delay - reject 1001
-		if atomic.LoadUint64(&c.goroutines) >= goroutinesMax {
+		if c.goroutines.Load() >= goroutinesMax {
 			return errors.E(op, errors.Str("max concurrency number reached"))
 		}
 
 		go func(jj *Item) {
-			atomic.AddUint64(&c.goroutines, 1)
-			atomic.AddInt64(c.delayed, 1)
+			c.goroutines.Add(1)
+			c.delayed.Add(1)
 
-			defer atomic.AddUint64(&c.goroutines, ^uint64(0))
+			defer c.goroutines.Add(^uint64(0))
 
 			time.Sleep(jj.Options.DelayDuration())
 
@@ -328,7 +290,6 @@ func (c *Driver) handleItem(ctx context.Context, msg *Item) error {
 		return nil
 	}
 
-	// insert to the local, limited pipeline
 	select {
 	case c.localQueue <- msg:
 		return nil
@@ -339,7 +300,6 @@ func (c *Driver) handleItem(ctx context.Context, msg *Item) error {
 
 func (c *Driver) consume() {
 	go func() {
-		// redirect
 		for {
 			select {
 			case item, ok := <-c.localQueue:
@@ -353,9 +313,8 @@ func (c *Driver) consume() {
 
 				c.cond.L.Lock()
 
-				for atomic.LoadInt64(c.msgInFlight) >= atomic.LoadInt64(c.msgInFlightLimit) {
-					c.log.Debug("prefetch limit was reached, waiting for the jobs to be processed", zap.Int64("current", atomic.LoadInt64(c.msgInFlight)), zap.Int64("limit", atomic.LoadInt64(c.msgInFlightLimit)))
-					// wait for the jobs to be processed
+				for c.msgInFlight.Load() >= c.msgInFlightLimit.Load() {
+					c.log.Debug("prefetch limit was reached, waiting for the jobs to be processed", zap.Int64("current", c.msgInFlight.Load()), zap.Int64("limit", c.msgInFlightLimit.Load()))
 					c.cond.Wait()
 				}
 
@@ -363,10 +322,9 @@ func (c *Driver) consume() {
 					item.Options.Priority = c.priority
 				}
 
-				// set requeue channel
 				item.Options.requeueFn = c.handleItem
-				item.Options.msgInFlight = c.msgInFlight
-				item.Options.delayed = c.delayed
+				item.Options.msgInFlight = &c.msgInFlight
+				item.Options.delayed = &c.delayed
 				item.Options.cond = &c.cond
 				item.Options.stopped = &c.stopped
 
@@ -374,14 +332,12 @@ func (c *Driver) consume() {
 					item.headers = make(map[string][]string, 1)
 				}
 
-				// inject OTEL headers
 				c.prop.Inject(ctx, propagation.HeaderCarrier(item.headers))
 				c.pq.Insert(item)
 
-				// increase number of the active jobs
-				atomic.AddInt64(c.msgInFlight, 1)
+				c.msgInFlight.Add(1)
 
-				c.log.Debug("message pushed to the priority queue", zap.Int64("current", atomic.LoadInt64(c.msgInFlight)), zap.Int64("limit", atomic.LoadInt64(c.msgInFlightLimit)))
+				c.log.Debug("message pushed to the priority queue", zap.Int64("current", c.msgInFlight.Load()), zap.Int64("limit", c.msgInFlightLimit.Load()))
 
 				c.cond.L.Unlock()
 				span.End()
@@ -390,12 +346,4 @@ func (c *Driver) consume() {
 			}
 		}
 	}()
-}
-
-func ready(r uint32) bool {
-	return r > 0
-}
-
-func toPtr[T any](v T) *T {
-	return &v
 }

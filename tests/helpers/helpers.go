@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	jobsProto "github.com/roadrunner-server/api/v4/build/jobs/v1"
-	jobState "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
-	goridgeRpc "github.com/roadrunner-server/goridge/v3/pkg/rpc"
+	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v1"
+	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
+	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +24,7 @@ const (
 
 func ResumePipes(address string, pipes ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
 		require.NoError(t, err)
 		defer func() {
 			_ = conn.Close()
@@ -33,7 +33,7 @@ func ResumePipes(address string, pipes ...string) func(t *testing.T) {
 
 		pipe := &jobsProto.Pipelines{Pipelines: make([]string, len(pipes))}
 
-		for i := 0; i < len(pipes); i++ {
+		for i := range len(pipes) {
 			pipe.GetPipelines()[i] = pipes[i]
 		}
 
@@ -45,7 +45,7 @@ func ResumePipes(address string, pipes ...string) func(t *testing.T) {
 
 func PushToPipe(pipeline string, autoAck bool, address string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
 		require.NoError(t, err)
 		defer func() {
 			_ = conn.Close()
@@ -62,7 +62,7 @@ func PushToPipe(pipeline string, autoAck bool, address string) func(t *testing.T
 
 func PausePipelines(address string, pipes ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
 		require.NoError(t, err)
 		defer func() {
 			_ = conn.Close()
@@ -71,7 +71,7 @@ func PausePipelines(address string, pipes ...string) func(t *testing.T) {
 
 		pipe := &jobsProto.Pipelines{Pipelines: make([]string, len(pipes))}
 
-		for i := 0; i < len(pipes); i++ {
+		for i := range len(pipes) {
 			pipe.GetPipelines()[i] = pipes[i]
 		}
 
@@ -83,7 +83,7 @@ func PausePipelines(address string, pipes ...string) func(t *testing.T) {
 
 func DestroyPipelines(address string, pipes ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
 		require.NoError(t, err)
 		defer func() {
 			_ = conn.Close()
@@ -92,11 +92,11 @@ func DestroyPipelines(address string, pipes ...string) func(t *testing.T) {
 
 		pipe := &jobsProto.Pipelines{Pipelines: make([]string, len(pipes))}
 
-		for i := 0; i < len(pipes); i++ {
+		for i := range len(pipes) {
 			pipe.GetPipelines()[i] = pipes[i]
 		}
 
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			er := &jobsProto.Empty{}
 			err = client.Call(destroy, pipe, er)
 			if err != nil {
@@ -111,7 +111,7 @@ func DestroyPipelines(address string, pipes ...string) func(t *testing.T) {
 
 func Stats(address string, state *jobState.State) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
 		require.NoError(t, err)
 		defer func() {
 			_ = conn.Close()
@@ -138,7 +138,7 @@ func Stats(address string, state *jobState.State) func(t *testing.T) {
 
 func PushToDisabledPipe(address, pipeline string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
 		require.NoError(t, err)
 		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 
@@ -161,7 +161,7 @@ func PushToDisabledPipe(address, pipeline string) func(t *testing.T) {
 
 func PushToPipeDelayed(address string, pipeline string, delay int64) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
 		assert.NoError(t, err)
 		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 

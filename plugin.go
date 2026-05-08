@@ -1,15 +1,22 @@
 package memory
 
 import (
+	"context"
+
 	_ "google.golang.org/genproto/protobuf/ptype" //nolint:revive,nolintlint
 
-	"github.com/roadrunner-server/api/v4/plugins/v1/kv"
-	"github.com/roadrunner-server/api/v4/plugins/v4/jobs"
+	"github.com/roadrunner-server/api-plugins/v6/jobs"
+	"github.com/roadrunner-server/api-plugins/v6/kv"
 	"github.com/roadrunner-server/endure/v2/dep"
-	"github.com/roadrunner-server/memory/v5/memoryjobs"
-	"github.com/roadrunner-server/memory/v5/memorykv"
+	"github.com/roadrunner-server/memory/v6/memoryjobs"
+	"github.com/roadrunner-server/memory/v6/memorykv"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.uber.org/zap"
+)
+
+var (
+	_ jobs.Constructor = (*Plugin)(nil)
+	_ kv.Constructor   = (*Plugin)(nil)
 )
 
 const PluginName string = "memory"
@@ -55,16 +62,16 @@ func (p *Plugin) Collects() []*dep.In {
 
 // Drivers implementation
 
-func (p *Plugin) KvFromConfig(_ string) (kv.Storage, error) {
+func (p *Plugin) KvFromConfig(_ context.Context, _ string) (kv.Storage, error) {
 	return memorykv.NewInMemoryDriver(p.log, p.tracer), nil
 }
 
 // DriverFromConfig constructs a memory driver from the .rr.yaml configuration
-func (p *Plugin) DriverFromConfig(configKey string, pq jobs.Queue, pipeline jobs.Pipeline) (jobs.Driver, error) {
+func (p *Plugin) DriverFromConfig(_ context.Context, configKey string, pq jobs.Queue, pipeline jobs.Pipeline) (jobs.Driver, error) {
 	return memoryjobs.FromConfig(p.tracer, configKey, p.log, p.cfg, pipeline, pq)
 }
 
 // DriverFromPipeline constructs a memory driver from a pipeline
-func (p *Plugin) DriverFromPipeline(pipe jobs.Pipeline, pq jobs.Queue) (jobs.Driver, error) {
+func (p *Plugin) DriverFromPipeline(_ context.Context, pipe jobs.Pipeline, pq jobs.Queue) (jobs.Driver, error) {
 	return memoryjobs.FromPipeline(p.tracer, pipe, p.log, pq)
 }

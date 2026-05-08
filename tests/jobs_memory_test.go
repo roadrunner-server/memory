@@ -1,14 +1,13 @@
 package memory
 
 import (
-	"io"
 	"log/slog"
+	"maps"
 	"net"
-	"net/http"
 	"net/rpc"
 	"os"
 	"os/signal"
-	"sort"
+	"slices"
 	"sync"
 	"syscall"
 	"testing"
@@ -19,23 +18,40 @@ import (
 	"tests/helpers"
 	mocklogger "tests/mock"
 
-	"github.com/goccy/go-json"
-	jobsProto "github.com/roadrunner-server/api/v4/build/jobs/v1"
-	jobState "github.com/roadrunner-server/api/v4/plugins/v1/jobs"
+	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v1"
+	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/config/v5"
 	"github.com/roadrunner-server/endure/v2"
-	goridgeRpc "github.com/roadrunner-server/goridge/v3/pkg/rpc"
+	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	"github.com/roadrunner-server/informer/v5"
-	"github.com/roadrunner-server/jobs/v5"
-	"github.com/roadrunner-server/memory/v5"
-	"github.com/roadrunner-server/otel/v5"
+	"github.com/roadrunner-server/jobs/v6"
+	"github.com/roadrunner-server/memory/v6"
 	"github.com/roadrunner-server/resetter/v5"
 	rpcPlugin "github.com/roadrunner-server/rpc/v5"
 	"github.com/roadrunner-server/server/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/zap"
 )
+
+type inMemoryTracer struct {
+	tp  *sdktrace.TracerProvider
+	exp *tracetest.InMemoryExporter
+}
+
+func newInMemoryTracer(t *testing.T) *inMemoryTracer {
+	t.Helper()
+	exp := tracetest.NewInMemoryExporter()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSyncer(exp))
+	t.Cleanup(func() { _ = tp.Shutdown(t.Context()) })
+	return &inMemoryTracer{tp: tp, exp: exp}
+}
+
+func (m *inMemoryTracer) Init() error                      { return nil }
+func (m *inMemoryTracer) Name() string                     { return "inMemoryTracer" }
+func (m *inMemoryTracer) Tracer() *sdktrace.TracerProvider { return m.tp }
 
 func TestMemoryInit(t *testing.T) {
 	cont := endure.New(slog.LevelDebug)
@@ -72,12 +88,9 @@ func TestMemoryInit(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -101,7 +114,7 @@ func TestMemoryInit(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second)
 	out := &jobState.State{}
@@ -155,12 +168,9 @@ func TestMemoryPQ(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -184,11 +194,11 @@ func TestMemoryPQ(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		t.Run("PushPipeline-1", helpers.PushToPipe("test-1-pq", false, "127.0.0.1:6601"))
 		t.Run("PushPipeline-2", helpers.PushToPipe("test-2-pq", false, "127.0.0.1:6601"))
 	}
@@ -241,12 +251,9 @@ func TestMemoryInitV27(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -270,7 +277,7 @@ func TestMemoryInitV27(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 1)
 	t.Run("PushPipeline", helpers.PushToPipe("test-1", false, "127.0.0.1:6001"))
@@ -323,12 +330,9 @@ func TestMemoryInitV27BadResp(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -352,7 +356,7 @@ func TestMemoryInitV27BadResp(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 1)
 	t.Run("PushPipeline", helpers.PushToPipe("test-1", false, "127.0.0.1:6001"))
@@ -403,12 +407,9 @@ func TestMemoryCreate(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -432,7 +433,7 @@ func TestMemoryCreate(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 5)
 
@@ -482,12 +483,9 @@ func TestMemoryDeclare(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -511,12 +509,12 @@ func TestMemoryDeclare(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 3)
 
 	t.Run("DeclarePipeline", declareMemoryPipe("10000"))
-	t.Run("ConsumePipeline", consumeMemoryPipe("127.0.0.1:6001", []string{"test-3"}))
+	t.Run("ConsumePipeline", consumeMemoryPipe([]string{"test-3"}))
 	t.Run("PushPipeline", helpers.PushToPipe("test-3", false, "127.0.0.1:6001"))
 	time.Sleep(time.Second)
 	t.Run("PausePipeline", helpers.PausePipelines("127.0.0.1:6001", "test-3"))
@@ -569,12 +567,9 @@ func TestMemoryPauseResume(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -598,7 +593,7 @@ func TestMemoryPauseResume(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 3)
 
@@ -655,12 +650,9 @@ func TestMemoryJobsError(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -684,7 +676,7 @@ func TestMemoryJobsError(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 3)
 
@@ -743,12 +735,9 @@ func TestMemoryStats(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -772,12 +761,12 @@ func TestMemoryStats(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 3)
 
 	t.Run("DeclarePipeline", declareMemoryPipe("10000"))
-	t.Run("ConsumePipeline", consumeMemoryPipe("127.0.0.1:6001", []string{"test-3"}))
+	t.Run("ConsumePipeline", consumeMemoryPipe([]string{"test-3"}))
 	t.Run("PushPipeline", helpers.PushToPipe("test-3", false, "127.0.0.1:6001"))
 	time.Sleep(time.Second)
 	t.Run("PausePipeline", helpers.PausePipelines("127.0.0.1:6001", "test-3"))
@@ -800,7 +789,7 @@ func TestMemoryStats(t *testing.T) {
 	assert.Equal(t, uint64(33), out.Priority)
 
 	time.Sleep(time.Second)
-	t.Run("ConsumePipeline", consumeMemoryPipe("127.0.0.1:6001", []string{"test-3"}))
+	t.Run("ConsumePipeline", consumeMemoryPipe([]string{"test-3"}))
 	time.Sleep(time.Second * 7)
 
 	out = &jobState.State{}
@@ -863,12 +852,9 @@ func TestMemoryPrefetch(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -892,13 +878,13 @@ func TestMemoryPrefetch(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second * 3)
 
 	t.Run("DeclarePipeline", declareMemoryPipe("1"))
-	t.Run("ConsumePipeline", consumeMemoryPipe("127.0.0.1:6001", []string{"test-3"}))
-	for i := 0; i < 10; i++ {
+	t.Run("ConsumePipeline", consumeMemoryPipe([]string{"test-3"}))
+	for range 10 {
 		t.Run("PushPipeline", helpers.PushToPipe("test-3", false, "127.0.0.1:6001"))
 	}
 
@@ -926,12 +912,13 @@ func TestMemoryTracer(t *testing.T) {
 		Path:    "configs/.rr-memory-tracer.yaml",
 	}
 
+	tracer := newInMemoryTracer(t)
 	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
 		&rpcPlugin.Plugin{},
-		&otel.Plugin{},
+		tracer,
 		l,
 		&jobs.Plugin{},
 		&resetter.Plugin{},
@@ -954,12 +941,9 @@ func TestMemoryTracer(t *testing.T) {
 	signal.Notify(sig, os.Interrupt, syscall.SIGINT, syscall.SIGTERM)
 
 	wg := &sync.WaitGroup{}
-	wg.Add(1)
-
 	stopCh := make(chan struct{}, 1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		for {
 			select {
 			case e := <-ch:
@@ -983,7 +967,7 @@ func TestMemoryTracer(t *testing.T) {
 				return
 			}
 		}
-	}()
+	})
 
 	time.Sleep(time.Second)
 	t.Run("PushPipeline", helpers.PushToPipe("test-1", false, "127.0.0.1:6001"))
@@ -994,19 +978,13 @@ func TestMemoryTracer(t *testing.T) {
 	stopCh <- struct{}{}
 	wg.Wait()
 
-	resp, err := http.Get("http://127.0.0.1:9411/api/v2/spans?serviceName=rr_test")
-	assert.NoError(t, err)
+	spans := tracer.exp.GetSpans()
+	spanNames := make(map[string]struct{}, len(spans))
+	for _, s := range spans {
+		spanNames[s.Name] = struct{}{}
+	}
 
-	buf, err := io.ReadAll(resp.Body)
-	assert.NoError(t, err)
-
-	var spans []string
-	err = json.Unmarshal(buf, &spans)
-	assert.NoError(t, err)
-
-	sort.Slice(spans, func(i, j int) bool {
-		return spans[i] < spans[j]
-	})
+	uniqueNames := slices.Sorted(maps.Keys(spanNames))
 
 	expected := []string{
 		"destroy_pipeline",
@@ -1017,21 +995,17 @@ func TestMemoryTracer(t *testing.T) {
 		"push",
 	}
 
-	assert.Equal(t, expected, spans)
+	assert.Equal(t, expected, uniqueNames)
 
 	require.Equal(t, 1, oLogger.FilterMessageSnippet("plugin was started").Len())
 	require.Equal(t, 1, oLogger.FilterMessageSnippet("job was pushed successfully").Len())
 	require.Equal(t, 1, oLogger.FilterMessageSnippet("job processing was started").Len())
 	require.Equal(t, 1, oLogger.FilterMessageSnippet("pipeline was stopped").Len())
-
-	t.Cleanup(func() {
-		_ = resp.Body.Close()
-	})
 }
 
 func declareMemoryPipe(prefetch string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", "127.0.0.1:6001")
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:6001")
 		assert.NoError(t, err)
 		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 
@@ -1048,18 +1022,14 @@ func declareMemoryPipe(prefetch string) func(t *testing.T) {
 	}
 }
 
-func consumeMemoryPipe(address string, pipelines []string) func(t *testing.T) {
+func consumeMemoryPipe(pipelines []string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := net.Dial("tcp", address)
+		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:6001")
 		assert.NoError(t, err)
 		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 
 		pipe := &jobsProto.Pipelines{
-			Pipelines: make([]string, 0, 1),
-		}
-
-		for i := 0; i < len(pipelines); i++ {
-			pipe.Pipelines = append(pipe.Pipelines, pipelines[i])
+			Pipelines: pipelines,
 		}
 
 		er := &jobsProto.Empty{}
