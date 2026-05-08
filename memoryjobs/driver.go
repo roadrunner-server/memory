@@ -2,6 +2,7 @@ package memoryjobs
 
 import (
 	"context"
+	"log/slog"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -14,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
-	"go.uber.org/zap"
 )
 
 const (
@@ -48,7 +48,7 @@ type Driver struct {
 	cond             sync.Cond
 
 	tracer     *sdktrace.TracerProvider
-	log        *zap.Logger
+	log        *slog.Logger
 	pipeline   atomic.Pointer[jobs.Pipeline]
 	pq         jobs.Queue
 	localQueue chan *Item
@@ -66,7 +66,7 @@ type Driver struct {
 func FromConfig(
 	tracer *sdktrace.TracerProvider,
 	configKey string,
-	log *zap.Logger,
+	log *slog.Logger,
 	cfg Configurer,
 	pipeline jobs.Pipeline,
 	pq jobs.Queue,
@@ -117,7 +117,7 @@ func FromConfig(
 func FromPipeline(
 	tracer *sdktrace.TracerProvider,
 	pipeline jobs.Pipeline,
-	log *zap.Logger,
+	log *slog.Logger,
 	pq jobs.Queue,
 ) (*Driver, error) {
 	pref, err := strconv.ParseInt(pipeline.String(prefetch, "100000"), 10, 64)
@@ -192,7 +192,7 @@ func (c *Driver) Run(ctx context.Context, pipe jobs.Pipeline) error {
 	c.consume()
 	c.listeners.Store(true)
 
-	c.log.Debug("pipeline was started", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(t).String()))
+	c.log.Debug("pipeline was started", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(t).String())
 	return nil
 }
 
@@ -213,7 +213,7 @@ func (c *Driver) Pause(ctx context.Context, p string) error {
 	c.listeners.Store(false)
 
 	c.stopCh <- struct{}{}
-	c.log.Debug("pipeline was paused", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
+	c.log.Debug("pipeline was paused", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(start).String())
 
 	return nil
 }
@@ -234,7 +234,7 @@ func (c *Driver) Resume(ctx context.Context, p string) error {
 	c.consume()
 
 	c.listeners.Store(true)
-	c.log.Debug("pipeline was resumed", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
+	c.log.Debug("pipeline was resumed", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(start).String())
 
 	return nil
 }
@@ -258,7 +258,7 @@ func (c *Driver) Stop(ctx context.Context) error {
 	c.localQueue = nil
 	c.stopped.Store(true)
 
-	c.log.Debug("pipeline was stopped", zap.String("driver", pipe.Driver()), zap.String("pipeline", pipe.Name()), zap.String("start", time.Now().UTC().String()), zap.String("elapsed", time.Since(start).String()))
+	c.log.Debug("pipeline was stopped", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(start).String())
 	return nil
 }
 
@@ -283,7 +283,7 @@ func (c *Driver) handleItem(ctx context.Context, msg *Item) error {
 			select {
 			case c.localQueue <- jj:
 			default:
-				c.log.Warn("can't push job", zap.String("error", "local queue closed or full"))
+				c.log.Warn("can't push job", "error", "local queue closed or full")
 			}
 		}(msg)
 
@@ -314,7 +314,7 @@ func (c *Driver) consume() {
 				c.cond.L.Lock()
 
 				for c.msgInFlight.Load() >= c.msgInFlightLimit.Load() {
-					c.log.Debug("prefetch limit was reached, waiting for the jobs to be processed", zap.Int64("current", c.msgInFlight.Load()), zap.Int64("limit", c.msgInFlightLimit.Load()))
+					c.log.Debug("prefetch limit was reached, waiting for the jobs to be processed", "current", c.msgInFlight.Load(), "limit", c.msgInFlightLimit.Load())
 					c.cond.Wait()
 				}
 
@@ -337,7 +337,7 @@ func (c *Driver) consume() {
 
 				c.msgInFlight.Add(1)
 
-				c.log.Debug("message pushed to the priority queue", zap.Int64("current", c.msgInFlight.Load()), zap.Int64("limit", c.msgInFlightLimit.Load()))
+				c.log.Debug("message pushed to the priority queue", "current", c.msgInFlight.Load(), "limit", c.msgInFlightLimit.Load())
 
 				c.cond.L.Unlock()
 				span.End()

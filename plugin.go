@@ -2,6 +2,7 @@ package memory
 
 import (
 	"context"
+	"log/slog"
 
 	_ "google.golang.org/genproto/protobuf/ptype" //nolint:revive,nolintlint
 
@@ -11,7 +12,6 @@ import (
 	"github.com/roadrunner-server/memory/v6/memoryjobs"
 	"github.com/roadrunner-server/memory/v6/memorykv"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.uber.org/zap"
 )
 
 var (
@@ -22,13 +22,13 @@ var (
 const PluginName string = "memory"
 
 type Plugin struct {
-	log    *zap.Logger
+	log    *slog.Logger
 	cfg    Configurer
 	tracer *sdktrace.TracerProvider
 }
 
 type Logger interface {
-	NamedLogger(name string) *zap.Logger
+	NamedLogger(name string) *slog.Logger
 }
 
 type Tracer interface {

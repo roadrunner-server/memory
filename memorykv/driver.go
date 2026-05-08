@@ -2,6 +2,7 @@ package memorykv
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -9,7 +10,6 @@ import (
 	"github.com/roadrunner-server/api-plugins/v6/kv"
 	"github.com/roadrunner-server/errors"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	"go.uber.org/zap"
 )
 
 const (
@@ -26,10 +26,10 @@ type Driver struct {
 	broadcastStopCh atomic.Pointer[chan struct{}]
 
 	tracer *sdktrace.TracerProvider
-	log    *zap.Logger
+	log    *slog.Logger
 }
 
-func NewInMemoryDriver(log *zap.Logger, tracer *sdktrace.TracerProvider) *Driver {
+func NewInMemoryDriver(log *slog.Logger, tracer *sdktrace.TracerProvider) *Driver {
 	if tracer == nil {
 		tracer = sdktrace.NewTracerProvider()
 	}
@@ -143,7 +143,7 @@ func (d *Driver) Set(ctx context.Context, items ...kv.Item) error {
 
 			tm := int(tt.UTC().Sub(time.Now().UTC()).Seconds())
 			if tm <= 0 {
-				d.log.Warn("incorrect TTL time, saving without it", zap.String("key", items[i].Key()))
+				d.log.Warn("incorrect TTL time, saving without it", "key", items[i].Key())
 				d.heap.Set(items[i].Key(), &Item{
 					key:   items[i].Key(),
 					value: items[i].Value(),
@@ -153,7 +153,7 @@ func (d *Driver) Set(ctx context.Context, items ...kv.Item) error {
 
 			stopCh, updateCh := d.ttlcallback(items[i].Key(), tm, *d.broadcastStopCh.Load())
 
-			d.log.Debug("saving item with TTL", zap.String("key", items[i].Key()), zap.String("ttl", items[i].Timeout()))
+			d.log.Debug("saving item with TTL", "key", items[i].Key(), "ttl", items[i].Timeout())
 			d.heap.Set(items[i].Key(), &Item{
 				key:     items[i].Key(),
 				value:   items[i].Value(),
@@ -164,7 +164,7 @@ func (d *Driver) Set(ctx context.Context, items ...kv.Item) error {
 				},
 			})
 		} else {
-			d.log.Debug("saving item without TTL", zap.String("key", items[i].Key()))
+			d.log.Debug("saving item without TTL", "key", items[i].Key())
 			d.heap.Set(items[i].Key(), &Item{
 				key:   items[i].Key(),
 				value: items[i].Value(),
@@ -300,31 +300,31 @@ func (d *Driver) ttlcallback(id string, ttl int, sCh <-chan struct{}) (chan stru
 			select {
 			case <-ta.C:
 				d.log.Debug("ttl expired",
-					zap.String("id", hid),
-					zap.Int("ttl seconds", cbttl),
+					"id", hid,
+					"ttl seconds", cbttl,
 				)
 				ta.Stop()
 				d.heap.removeEntry(hid)
 				return
 			case <-sCh:
 				d.log.Debug("ttl removed, broadcast call",
-					zap.String("id", hid),
-					zap.Int("ttl seconds", cbttl),
+					"id", hid,
+					"ttl seconds", cbttl,
 				)
 				ta.Stop()
 				d.heap.removeEntry(hid)
 				return
 			case <-stopCbCh:
 				d.log.Debug("ttl removed, callback call",
-					zap.String("id", hid),
-					zap.Int("ttl seconds", cbttl),
+					"id", hid,
+					"ttl seconds", cbttl,
 				)
 				return
 			case newTTL := <-updateTTLCh:
 				d.log.Debug("updating ttl",
-					zap.String("id", hid),
-					zap.Int("prev_ttl", cbttl),
-					zap.Int("new_ttl", newTTL))
+					"id", hid,
+					"prev_ttl", cbttl,
+					"new_ttl", newTTL)
 				cbttl = newTTL
 				ta.Reset(time.Second * time.Duration(newTTL))
 			}
