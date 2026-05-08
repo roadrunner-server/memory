@@ -109,10 +109,6 @@ func TestInMemoryOrder(t *testing.T) {
 	time.Sleep(time.Second * 1)
 	stopCh <- struct{}{}
 	wg.Wait()
-
-	t.Cleanup(func() {
-
-	})
 }
 
 func TestSetManyMemory(t *testing.T) {
