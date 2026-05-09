@@ -13,11 +13,6 @@ import (
 	"testing"
 	"time"
 
-	_ "google.golang.org/genproto/protobuf/ptype" //nolint:revive,nolintlint
-
-	"tests/helpers"
-	mocklogger "tests/mock"
-
 	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v1"
 	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/config/v5"
@@ -33,7 +28,9 @@ import (
 	"github.com/stretchr/testify/require"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"go.uber.org/zap"
+	_ "google.golang.org/genproto/protobuf/ptype" //nolint:revive,nolintlint
+	"tests/helpers"
+	mocklogger "tests/mock"
 )
 
 type inMemoryTracer struct {
@@ -61,7 +58,7 @@ func TestMemoryInit(t *testing.T) {
 		Path:    "configs/.rr-memory-init.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -141,7 +138,7 @@ func TestMemoryPQ(t *testing.T) {
 		Path:    "configs/.rr-memory-pq.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -224,7 +221,7 @@ func TestMemoryInitV27(t *testing.T) {
 		Version: "2024.1.0",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -303,7 +300,7 @@ func TestMemoryInitV27BadResp(t *testing.T) {
 		Path:    "configs/.rr-memory-init-v27-br.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -379,7 +376,7 @@ func TestMemoryCreate(t *testing.T) {
 		Path:    "configs/.rr-memory-create.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -456,7 +453,7 @@ func TestMemoryDeclare(t *testing.T) {
 		Path:    "configs/.rr-memory-declare.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -539,7 +536,7 @@ func TestMemoryPauseResume(t *testing.T) {
 		Path:    "configs/.rr-memory-pause-resume.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -623,7 +620,7 @@ func TestMemoryJobsError(t *testing.T) {
 		Path:    "configs/.rr-memory-jobs-err.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -708,7 +705,7 @@ func TestMemoryStats(t *testing.T) {
 		Path:    "configs/.rr-memory-declare.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -825,7 +822,7 @@ func TestMemoryPrefetch(t *testing.T) {
 		Path:    "configs/.rr-memory-prefetch.yaml",
 	}
 
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
@@ -913,7 +910,7 @@ func TestMemoryTracer(t *testing.T) {
 	}
 
 	tracer := newInMemoryTracer(t)
-	l, oLogger := mocklogger.ZapTestLogger(zap.DebugLevel)
+	l, oLogger := mocklogger.SlogTestLogger(slog.LevelDebug)
 	err := cont.RegisterAll(
 		cfg,
 		&server.Plugin{},
