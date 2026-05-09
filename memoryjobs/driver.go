@@ -158,7 +158,10 @@ func (c *Driver) Push(ctx context.Context, jb jobs.Message) error {
 		return errors.E(op, errors.Errorf("no such pipeline: %s", jb.GroupID()))
 	}
 
-	return errors.E(op, c.handleItem(ctx, fromJob(jb)))
+	if err := c.handleItem(ctx, fromJob(jb)); err != nil {
+		return errors.E(op, err)
+	}
+	return nil
 }
 
 func (c *Driver) State(ctx context.Context) (*jobs.State, error) {
