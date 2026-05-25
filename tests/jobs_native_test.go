@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -39,7 +38,7 @@ func TestJobsNativeDeclare(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	client := jobsV2connect.NewJobsServiceClient(srv.Client(), strings.TrimSuffix(srv.URL, "/"))
+	client := jobsV2connect.NewJobsServiceClient(srv.Client(), srv.URL)
 	_, err := client.Declare(t.Context(), connect.NewRequest(&jobsProto.DeclareRequest{
 		Pipeline: map[string]string{
 			"driver":   "memory",

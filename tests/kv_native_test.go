@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"connectrpc.com/connect"
@@ -40,7 +39,7 @@ func TestKVNativeHas(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	client := kvV2connect.NewKvServiceClient(srv.Client(), strings.TrimSuffix(srv.URL, "/"))
+	client := kvV2connect.NewKvServiceClient(srv.Client(), srv.URL)
 	resp, err := client.Has(t.Context(), connect.NewRequest(&kvProto.KvRequest{
 		Storage: "memory-rr",
 		Items:   []*kvProto.KvItem{{Key: "test_key"}},
