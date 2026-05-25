@@ -3,8 +3,6 @@ package memory
 import (
 	"log/slog"
 	"maps"
-	"net"
-	"net/rpc"
 	"os"
 	"os/signal"
 	"slices"
@@ -13,11 +11,14 @@ import (
 	"testing"
 	"time"
 
-	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v1"
+	"tests/helpers"
+	mocklogger "tests/mock"
+
+	"connectrpc.com/connect"
+	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v2"
 	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/config/v6"
 	"github.com/roadrunner-server/endure/v2"
-	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	"github.com/roadrunner-server/informer/v6"
 	"github.com/roadrunner-server/jobs/v6"
 	"github.com/roadrunner-server/memory/v6"
@@ -29,8 +30,6 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	_ "google.golang.org/genproto/protobuf/ptype" //nolint:revive,nolintlint
-	"tests/helpers"
-	mocklogger "tests/mock"
 )
 
 type inMemoryTracer struct {
@@ -1002,35 +1001,22 @@ func TestMemoryTracer(t *testing.T) {
 
 func declareMemoryPipe(prefetch string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:6001")
-		assert.NoError(t, err)
-		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
-
-		pipe := &jobsProto.DeclareRequest{Pipeline: map[string]string{
+		client := helpers.NewJobsClient(t, "127.0.0.1:6001")
+		req := &jobsProto.DeclareRequest{Pipeline: map[string]string{
 			"driver":   "memory",
 			"name":     "test-3",
 			"prefetch": prefetch,
 			"priority": "33",
 		}}
-
-		er := &jobsProto.Empty{}
-		err = client.Call("jobs.Declare", pipe, er)
+		_, err := client.Declare(t.Context(), connect.NewRequest(req))
 		assert.NoError(t, err)
 	}
 }
 
 func consumeMemoryPipe(pipelines []string) func(t *testing.T) {
 	return func(t *testing.T) {
-		conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", "127.0.0.1:6001")
-		assert.NoError(t, err)
-		client := rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
-
-		pipe := &jobsProto.Pipelines{
-			Pipelines: pipelines,
-		}
-
-		er := &jobsProto.Empty{}
-		err = client.Call("jobs.Resume", pipe, er)
+		client := helpers.NewJobsClient(t, "127.0.0.1:6001")
+		_, err := client.Resume(t.Context(), connect.NewRequest(&jobsProto.Pipelines{Pipelines: slices.Clone(pipelines)}))
 		assert.NoError(t, err)
 	}
 }
