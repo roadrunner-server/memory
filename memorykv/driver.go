@@ -201,6 +201,9 @@ func (d *Driver) MExpire(ctx context.Context, items ...kv.Item) error {
 		ttm := int(tm.UTC().Sub(time.Now().UTC()).Seconds())
 		if ttm <= 0 {
 			d.log.Warn("incorrect TTL time for MExpire, saving without it", "key", it.Key())
+			// Stop any existing TTL callback before overwriting so the old goroutine
+			// cannot fire removeEntry on the newly saved item.
+			d.heap.Delete(it.Key())
 			d.heap.Set(it.Key(), &Item{
 				key:   it.Key(),
 				value: it.Value(),
