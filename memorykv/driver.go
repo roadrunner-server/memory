@@ -52,19 +52,19 @@ func (d *Driver) Has(ctx context.Context, keys ...string) (map[string]bool, erro
 	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:has")
 	defer span.End()
 
-	if keys == nil {
+	if len(keys) == 0 {
 		span.RecordError(errors.Str("no keys provided"))
 		return nil, errors.E(op, errors.NoKeys)
 	}
 
 	m := make(map[string]bool, len(keys))
-	for i := range keys {
-		if strings.TrimSpace(keys[i]) == "" {
+	for _, k := range keys {
+		if strings.TrimSpace(k) == "" {
 			return nil, errors.E(op, errors.EmptyKey)
 		}
 
-		if _, ok := d.heap.Get(keys[i]); ok {
-			m[keys[i]] = true
+		if _, ok := d.heap.Get(k); ok {
+			m[k] = true
 		}
 	}
 
@@ -95,20 +95,20 @@ func (d *Driver) MGet(ctx context.Context, keys ...string) (map[string][]byte, e
 	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:mget")
 	defer span.End()
 
-	if keys == nil {
+	if len(keys) == 0 {
 		span.RecordError(errors.Str("no keys provided"))
 		return nil, errors.E(op, errors.NoKeys)
 	}
 
 	m := make(map[string][]byte, len(keys))
-	for i := range keys {
-		if strings.TrimSpace(keys[i]) == "" {
+	for _, k := range keys {
+		if strings.TrimSpace(k) == "" {
 			span.RecordError(errors.Str("empty key"))
 			return nil, errors.E(op, errors.EmptyKey)
 		}
 
-		if value, ok := d.heap.Get(keys[i]); ok {
-			m[keys[i]] = value.Value()
+		if value, ok := d.heap.Get(k); ok {
+			m[k] = value.Value()
 		}
 	}
 
@@ -120,22 +120,22 @@ func (d *Driver) Set(ctx context.Context, items ...kv.Item) error {
 	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:set")
 	defer span.End()
 
-	if items == nil {
+	if len(items) == 0 {
 		span.RecordError(errors.Str("no items provided"))
 		return errors.E(op, errors.NoKeys)
 	}
 
-	for i := range items {
-		if items[i] == nil {
+	for _, it := range items {
+		if it == nil {
 			continue
 		}
 
 		// check for the duplicates
-		d.heap.Delete(items[i].Key())
+		d.heap.Delete(it.Key())
 
 		// TTL is set
-		if items[i].Timeout() != "" {
-			tt, err := time.Parse(time.RFC3339, items[i].Timeout())
+		if it.Timeout() != "" {
+			tt, err := time.Parse(time.RFC3339, it.Timeout())
 			if err != nil {
 				span.RecordError(err)
 				return err
@@ -143,31 +143,31 @@ func (d *Driver) Set(ctx context.Context, items ...kv.Item) error {
 
 			tm := int(tt.UTC().Sub(time.Now().UTC()).Seconds())
 			if tm <= 0 {
-				d.log.Warn("incorrect TTL time, saving without it", "key", items[i].Key())
-				d.heap.Set(items[i].Key(), &Item{
-					key:   items[i].Key(),
-					value: items[i].Value(),
+				d.log.Warn("incorrect TTL time, saving without it", "key", it.Key())
+				d.heap.Set(it.Key(), &Item{
+					key:   it.Key(),
+					value: it.Value(),
 				})
 				continue
 			}
 
-			stopCh, updateCh := d.ttlcallback(items[i].Key(), tm, *d.broadcastStopCh.Load())
+			stopCh, updateCh := d.ttlcallback(it.Key(), tm, *d.broadcastStopCh.Load())
 
-			d.log.Debug("saving item with TTL", "key", items[i].Key(), "ttl", items[i].Timeout())
-			d.heap.Set(items[i].Key(), &Item{
-				key:     items[i].Key(),
-				value:   items[i].Value(),
-				timeout: items[i].Timeout(),
+			d.log.Debug("saving item with TTL", "key", it.Key(), "ttl", it.Timeout())
+			d.heap.Set(it.Key(), &Item{
+				key:     it.Key(),
+				value:   it.Value(),
+				timeout: it.Timeout(),
 				callback: &cb{
 					updateCh: updateCh,
 					stopCh:   stopCh,
 				},
 			})
 		} else {
-			d.log.Debug("saving item without TTL", "key", items[i].Key())
-			d.heap.Set(items[i].Key(), &Item{
-				key:   items[i].Key(),
-				value: items[i].Value(),
+			d.log.Debug("saving item without TTL", "key", it.Key())
+			d.heap.Set(it.Key(), &Item{
+				key:   it.Key(),
+				value: it.Value(),
 			})
 		}
 	}
@@ -182,33 +182,41 @@ func (d *Driver) MExpire(ctx context.Context, items ...kv.Item) error {
 	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:mexpire")
 	defer span.End()
 
-	for i := range items {
-		if items[i] == nil {
+	for _, it := range items {
+		if it == nil {
 			continue
 		}
 
-		if items[i].Timeout() == "" || strings.TrimSpace(items[i].Key()) == "" {
+		if it.Timeout() == "" || strings.TrimSpace(it.Key()) == "" {
 			span.RecordError(errors.Str("timeout for MExpire is empty or key is empty"))
 			return errors.E(op, errors.Str("timeout for MExpire is empty or key is empty"))
 		}
 
-		tm, err := time.Parse(time.RFC3339, items[i].Timeout())
+		tm, err := time.Parse(time.RFC3339, it.Timeout())
 		if err != nil {
 			span.RecordError(err)
 			return errors.E(op, err)
 		}
 
-		ttm := max(int(tm.UTC().Sub(time.Now().UTC()).Seconds()), 0)
+		ttm := int(tm.UTC().Sub(time.Now().UTC()).Seconds())
+		if ttm <= 0 {
+			d.log.Warn("incorrect TTL time for MExpire, saving without it", "key", it.Key())
+			d.heap.Set(it.Key(), &Item{
+				key:   it.Key(),
+				value: it.Value(),
+			})
+			continue
+		}
 
-		if clb, ok := d.heap.Get(items[i].Key()); ok && clb.callback != nil {
+		if clb, ok := d.heap.Get(it.Key()); ok && clb.callback != nil {
 			clb.callback.updateCh <- ttm
 		} else {
-			stopCh, updateCh := d.ttlcallback(items[i].Key(), ttm, *d.broadcastStopCh.Load())
-			d.heap.removeEntry(items[i].Key())
-			d.heap.Set(items[i].Key(), &Item{
-				key:     items[i].Key(),
-				value:   items[i].Value(),
-				timeout: items[i].Timeout(),
+			stopCh, updateCh := d.ttlcallback(it.Key(), ttm, *d.broadcastStopCh.Load())
+			d.heap.removeEntry(it.Key())
+			d.heap.Set(it.Key(), &Item{
+				key:     it.Key(),
+				value:   it.Value(),
+				timeout: it.Timeout(),
 				callback: &cb{
 					updateCh: updateCh,
 					stopCh:   stopCh,
@@ -225,20 +233,20 @@ func (d *Driver) TTL(ctx context.Context, keys ...string) (map[string]string, er
 	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:ttl")
 	defer span.End()
 
-	if keys == nil {
+	if len(keys) == 0 {
 		span.RecordError(errors.Str("no keys provided"))
 		return nil, errors.E(op, errors.NoKeys)
 	}
 
 	m := make(map[string]string, len(keys))
-	for i := range keys {
-		if strings.TrimSpace(keys[i]) == "" {
+	for _, k := range keys {
+		if strings.TrimSpace(k) == "" {
 			span.RecordError(errors.Str("empty key"))
 			return nil, errors.E(op, errors.EmptyKey)
 		}
 
-		if item, ok := d.heap.Get(keys[i]); ok {
-			m[keys[i]] = item.Timeout()
+		if item, ok := d.heap.Get(k); ok {
+			m[k] = item.Timeout()
 		}
 	}
 
@@ -250,23 +258,20 @@ func (d *Driver) Delete(ctx context.Context, keys ...string) error {
 	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:delete")
 	defer span.End()
 
-	if keys == nil {
+	if len(keys) == 0 {
 		span.RecordError(errors.Str("no keys provided"))
 		return errors.E(op, errors.NoKeys)
 	}
 
-	for i := range keys {
-		if strings.TrimSpace(keys[i]) == "" {
+	for _, key := range keys {
+		if strings.TrimSpace(key) == "" {
 			span.RecordError(errors.Str("empty key"))
 			return errors.E(op, errors.EmptyKey)
 		}
 	}
 
-	for i := range keys {
-		k, ok := d.heap.LoadAndDelete(keys[i])
-		if ok && k.callback != nil {
-			k.callback.stopCh <- struct{}{}
-		}
+	for _, key := range keys {
+		d.heap.LoadAndDelete(key)
 	}
 
 	return nil

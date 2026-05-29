@@ -79,7 +79,7 @@ func FromConfig(
 
 	jb := &Driver{
 		tracer: tracer,
-		cond:   sync.Cond{L: &sync.Mutex{}},
+		cond:   *sync.NewCond(&sync.Mutex{}),
 		log:    log,
 		pq:     pq,
 		stopCh: make(chan struct{}),
@@ -133,7 +133,7 @@ func FromPipeline(
 		tracer:     tracer,
 		log:        log,
 		pq:         pq,
-		cond:       sync.Cond{L: &sync.Mutex{}},
+		cond:       *sync.NewCond(&sync.Mutex{}),
 		localQueue: make(chan *Item, 100_000),
 		priority:   pipeline.Priority(),
 		stopCh:     make(chan struct{}),
@@ -195,7 +195,7 @@ func (c *Driver) Run(ctx context.Context, pipe jobs.Pipeline) error {
 	c.consume()
 	c.listeners.Store(true)
 
-	c.log.Debug("pipeline was started", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(t).String())
+	c.log.Debug("pipeline was started", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", t.String(), "elapsed", time.Since(t).String())
 	return nil
 }
 
@@ -216,7 +216,7 @@ func (c *Driver) Pause(ctx context.Context, p string) error {
 	c.listeners.Store(false)
 
 	c.stopCh <- struct{}{}
-	c.log.Debug("pipeline was paused", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(start).String())
+	c.log.Debug("pipeline was paused", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", start.String(), "elapsed", time.Since(start).String())
 
 	return nil
 }
@@ -237,7 +237,7 @@ func (c *Driver) Resume(ctx context.Context, p string) error {
 	c.consume()
 
 	c.listeners.Store(true)
-	c.log.Debug("pipeline was resumed", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(start).String())
+	c.log.Debug("pipeline was resumed", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", start.String(), "elapsed", time.Since(start).String())
 
 	return nil
 }
@@ -261,7 +261,7 @@ func (c *Driver) Stop(ctx context.Context) error {
 	c.localQueue = nil
 	c.stopped.Store(true)
 
-	c.log.Debug("pipeline was stopped", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", time.Now().UTC().String(), "elapsed", time.Since(start).String())
+	c.log.Debug("pipeline was stopped", "driver", pipe.Driver(), "pipeline", pipe.Name(), "start", start.String(), "elapsed", time.Since(start).String())
 	return nil
 }
 
