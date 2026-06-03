@@ -45,7 +45,7 @@ type Driver struct {
 	delayed          atomic.Int64
 	msgInFlight      atomic.Int64
 	msgInFlightLimit atomic.Int64
-	cond             sync.Cond
+	cond             *sync.Cond
 
 	tracer     *sdktrace.TracerProvider
 	log        *slog.Logger
@@ -79,7 +79,7 @@ func FromConfig(
 
 	jb := &Driver{
 		tracer: tracer,
-		cond:   *sync.NewCond(&sync.Mutex{}),
+		cond:   sync.NewCond(&sync.Mutex{}),
 		log:    log,
 		pq:     pq,
 		stopCh: make(chan struct{}),
@@ -133,7 +133,7 @@ func FromPipeline(
 		tracer:     tracer,
 		log:        log,
 		pq:         pq,
-		cond:       *sync.NewCond(&sync.Mutex{}),
+		cond:       sync.NewCond(&sync.Mutex{}),
 		localQueue: make(chan *Item, 100_000),
 		priority:   pipeline.Priority(),
 		stopCh:     make(chan struct{}),
@@ -328,7 +328,7 @@ func (c *Driver) consume() {
 				item.Options.requeueFn = c.handleItem
 				item.Options.msgInFlight = &c.msgInFlight
 				item.Options.delayed = &c.delayed
-				item.Options.cond = &c.cond
+				item.Options.cond = c.cond
 				item.Options.stopped = &c.stopped
 
 				if item.headers == nil {
