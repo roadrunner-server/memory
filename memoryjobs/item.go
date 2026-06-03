@@ -2,12 +2,11 @@ package memoryjobs
 
 import (
 	"context"
+	"encoding/json"
 	"maps"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"encoding/json"
 
 	"github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/errors"
