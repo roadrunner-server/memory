@@ -1,67 +1,80 @@
 package helpers
 
 import (
-	"context"
-	"crypto/tls"
 	"net"
-	"net/http"
+	"net/rpc"
 	"slices"
 	"testing"
 	"time"
 
-	"connectrpc.com/connect"
 	"github.com/google/uuid"
 	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v2"
-	"github.com/roadrunner-server/api-go/v6/jobs/v2/jobsV2connect"
-	"github.com/roadrunner-server/api-go/v6/kv/v2/kvV2connect"
 	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
+	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/http2"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func newHTTPClient(t *testing.T) *http.Client {
+const (
+	push    = "jobs.Push"
+	pause   = "jobs.Pause"
+	destroy = "jobs.Destroy"
+	resume  = "jobs.Resume"
+	stat    = "jobs.GetStats"
+)
+
+// dialRPC opens a goridge net/rpc client against the RoadRunner RPC endpoint.
+func dialRPC(t *testing.T, address string) *rpc.Client {
 	t.Helper()
-	httpc := &http.Client{Transport: &http2.Transport{
-		AllowHTTP: true,
-		DialTLSContext: func(ctx context.Context, network, addr string, _ *tls.Config) (net.Conn, error) {
-			return new(net.Dialer).DialContext(ctx, network, addr)
-		},
-	}}
-	t.Cleanup(httpc.CloseIdleConnections)
-	return httpc
+	conn, err := (&net.Dialer{}).DialContext(t.Context(), "tcp", address)
+	require.NoError(t, err)
+	return rpc.NewClientWithCodec(goridgeRpc.NewClientCodec(conn))
 }
 
-func NewJobsClient(t *testing.T, address string) jobsV2connect.JobsServiceClient {
+// NewJobsClient returns a goridge net/rpc client for the jobs plugin RPC surface.
+// The connection is closed on test cleanup.
+func NewJobsClient(t *testing.T, address string) *rpc.Client {
 	t.Helper()
-	return jobsV2connect.NewJobsServiceClient(newHTTPClient(t), "http://"+address)
+	client := dialRPC(t, address)
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
 
-func NewKVClient(t *testing.T, address string) kvV2connect.KvServiceClient {
+// NewKVClient returns a goridge net/rpc client for the kv plugin RPC surface.
+// The connection is closed on test cleanup.
+func NewKVClient(t *testing.T, address string) *rpc.Client {
 	t.Helper()
-	return kvV2connect.NewKvServiceClient(newHTTPClient(t), "http://"+address)
+	client := dialRPC(t, address)
+	t.Cleanup(func() { _ = client.Close() })
+	return client
 }
 
 func ResumePipes(address string, pipes ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		client := NewJobsClient(t, address)
-		_, err := client.Resume(t.Context(), connect.NewRequest(&jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}))
+		client := dialRPC(t, address)
+		defer func() { _ = client.Close() }()
+
+		err := client.Call(resume, &jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}, &jobsProto.JobsHandlerResponse{})
 		require.NoError(t, err)
 	}
 }
 
 func PushToPipe(pipeline string, autoAck bool, address string) func(t *testing.T) {
 	return func(t *testing.T) {
-		client := NewJobsClient(t, address)
-		_, err := client.Push(t.Context(), connect.NewRequest(&jobsProto.PushRequest{Job: createDummyJob(pipeline, autoAck)}))
+		client := dialRPC(t, address)
+		defer func() { _ = client.Close() }()
+
+		err := client.Call(push, &jobsProto.PushRequest{Job: createDummyJob(pipeline, autoAck)}, &jobsProto.JobsHandlerResponse{})
 		require.NoError(t, err)
 	}
 }
 
 func PushToDisabledPipe(address, pipeline string) func(t *testing.T) {
 	return func(t *testing.T) {
-		client := NewJobsClient(t, address)
+		client := dialRPC(t, address)
+		defer func() { _ = client.Close() }()
+
 		req := &jobsProto.PushRequest{Job: &jobsProto.Job{
 			Job:     "some/php/namespace",
 			Id:      "1",
@@ -72,14 +85,16 @@ func PushToDisabledPipe(address, pipeline string) func(t *testing.T) {
 				Pipeline: pipeline,
 			},
 		}}
-		_, err := client.Push(t.Context(), connect.NewRequest(req))
+		err := client.Call(push, req, &jobsProto.JobsHandlerResponse{})
 		require.NoError(t, err)
 	}
 }
 
 func PushToPipeDelayed(address string, pipeline string, delay int64) func(t *testing.T) {
 	return func(t *testing.T) {
-		client := NewJobsClient(t, address)
+		client := dialRPC(t, address)
+		defer func() { _ = client.Close() }()
+
 		req := &jobsProto.PushRequest{Job: &jobsProto.Job{
 			Job:     "some/php/namespace",
 			Id:      uuid.NewString(),
@@ -91,7 +106,7 @@ func PushToPipeDelayed(address string, pipeline string, delay int64) func(t *tes
 				Delay:    delay,
 			},
 		}}
-		_, err := client.Push(t.Context(), connect.NewRequest(req))
+		err := client.Call(push, req, &jobsProto.JobsHandlerResponse{})
 		assert.NoError(t, err)
 	}
 }
@@ -113,22 +128,26 @@ func createDummyJob(pipeline string, autoAck bool) *jobsProto.Job {
 
 func PausePipelines(address string, pipes ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		client := NewJobsClient(t, address)
-		_, err := client.Pause(t.Context(), connect.NewRequest(&jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}))
+		client := dialRPC(t, address)
+		defer func() { _ = client.Close() }()
+
+		err := client.Call(pause, &jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}, &jobsProto.JobsHandlerResponse{})
 		assert.NoError(t, err)
 	}
 }
 
 func DestroyPipelines(address string, pipes ...string) func(t *testing.T) {
 	return func(t *testing.T) {
-		client := NewJobsClient(t, address)
+		client := dialRPC(t, address)
+		defer func() { _ = client.Close() }()
+
 		req := &jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}
 
 		// Retry the destroy 10× with 1s gaps; if all attempts fail, return
 		// without asserting. Some negative tests intentionally destroy
 		// non-existent pipelines and rely on this silent-after-retry pattern.
 		for range 10 {
-			_, err := client.Destroy(t.Context(), connect.NewRequest(req))
+			err := client.Call(destroy, req, &jobsProto.Pipelines{})
 			if err == nil {
 				return
 			}
@@ -139,21 +158,23 @@ func DestroyPipelines(address string, pipes ...string) func(t *testing.T) {
 
 func Stats(address string, state *jobState.State) func(t *testing.T) {
 	return func(t *testing.T) {
-		client := NewJobsClient(t, address)
+		client := dialRPC(t, address)
+		defer func() { _ = client.Close() }()
 
-		resp, err := client.GetStats(t.Context(), connect.NewRequest(&emptypb.Empty{}))
+		st := &jobsProto.Stats{}
+		err := client.Call(stat, &emptypb.Empty{}, st)
 		require.NoError(t, err)
-		require.NotNil(t, resp)
-		require.NotEmpty(t, resp.Msg.GetStats())
+		require.NotNil(t, st)
+		require.NotEmpty(t, st.GetStats())
 
-		st := resp.Msg.GetStats()[0]
-		state.Queue = st.GetQueue()
-		state.Pipeline = st.GetPipeline()
-		state.Driver = st.GetDriver()
-		state.Active = st.GetActive()
-		state.Delayed = st.GetDelayed()
-		state.Reserved = st.GetReserved()
-		state.Ready = st.GetReady()
-		state.Priority = st.GetPriority()
+		s := st.GetStats()[0]
+		state.Queue = s.GetQueue()
+		state.Pipeline = s.GetPipeline()
+		state.Driver = s.GetDriver()
+		state.Active = s.GetActive()
+		state.Delayed = s.GetDelayed()
+		state.Reserved = s.GetReserved()
+		state.Ready = s.GetReady()
+		state.Priority = s.GetPriority()
 	}
 }

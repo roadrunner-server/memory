@@ -14,7 +14,6 @@ import (
 
 	"tests/helpers"
 
-	"connectrpc.com/connect"
 	kvProto "github.com/roadrunner-server/api-go/v6/kv/v2"
 	"github.com/roadrunner-server/config/v6"
 	"github.com/roadrunner-server/endure/v2"
@@ -177,7 +176,6 @@ func TestSetManyMemory(t *testing.T) {
 	ngprev := runtime.NumGoroutine()
 
 	client := helpers.NewKVClient(t, "127.0.0.1:6666")
-	ctx := t.Context()
 
 	tt := durationpb.New(time.Minute * 10)
 	data := &kvProto.KvRequest{
@@ -191,7 +189,7 @@ func TestSetManyMemory(t *testing.T) {
 	}
 
 	for range 10_000 {
-		_, err := client.Set(ctx, connect.NewRequest(data))
+		err := client.Call("kv.Set", data, &kvProto.KvResponse{})
 		require.NoError(t, err)
 	}
 	runtime.GC()
@@ -215,7 +213,7 @@ func TestSetManyMemory(t *testing.T) {
 
 	time.Sleep(time.Second * 5)
 
-	_, err = client.Clear(ctx, connect.NewRequest(data))
+	err = client.Call("kv.Clear", data, &kvProto.KvResponse{})
 	require.NoError(t, err)
 
 	stopCh <- struct{}{}
@@ -289,7 +287,6 @@ func testRPCMethodsInMemory(t *testing.T) {
 	const storage = "memory-rr"
 
 	client := helpers.NewKVClient(t, "127.0.0.1:6001")
-	ctx := t.Context()
 
 	tt := durationpb.New(time.Second * 5)
 	keys := &kvProto.KvRequest{
@@ -312,23 +309,26 @@ func testRPCMethodsInMemory(t *testing.T) {
 		},
 	}
 
-	_, err := client.Set(ctx, connect.NewRequest(data))
+	err := client.Call("kv.Set", data, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
-	resp, err := client.Has(ctx, connect.NewRequest(keys))
+	resp := &kvProto.KvResponse{}
+	err = client.Call("kv.Has", keys, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 3)
+	assert.Len(t, resp.GetItems(), 3)
 
 	// key "c" should be deleted
 	time.Sleep(time.Second * 7)
 
-	resp, err = client.Has(ctx, connect.NewRequest(keys))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.Has", keys, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 2)
+	assert.Len(t, resp.GetItems(), 2)
 
-	resp, err = client.MGet(ctx, connect.NewRequest(keys))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.MGet", keys, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 2) // c is expired
+	assert.Len(t, resp.GetItems(), 2) // c is expired
 
 	tt2 := durationpb.New(time.Second * 10)
 
@@ -341,7 +341,7 @@ func testRPCMethodsInMemory(t *testing.T) {
 		},
 	}
 
-	_, err = client.MExpire(ctx, connect.NewRequest(data2))
+	err = client.Call("kv.MExpire", data2, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
 	keys2 := &kvProto.KvRequest{
@@ -353,27 +353,30 @@ func testRPCMethodsInMemory(t *testing.T) {
 		},
 	}
 
-	resp, err = client.TTL(ctx, connect.NewRequest(keys2))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.TTL", keys2, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 3)
+	assert.Len(t, resp.GetItems(), 3)
 
 	// HAS AFTER TTL
 	time.Sleep(time.Second * 15)
-	resp, err = client.Has(ctx, connect.NewRequest(keys2))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.Has", keys2, resp)
 	assert.NoError(t, err)
-	assert.Empty(t, resp.Msg.GetItems())
+	assert.Empty(t, resp.GetItems())
 
 	keysDel := &kvProto.KvRequest{
 		Storage: storage,
 		Items:   []*kvProto.KvItem{{Key: "e"}},
 	}
 
-	_, err = client.Delete(ctx, connect.NewRequest(keysDel))
+	err = client.Call("kv.Delete", keysDel, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
-	resp, err = client.Has(ctx, connect.NewRequest(keysDel))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.Has", keysDel, resp)
 	assert.NoError(t, err)
-	assert.Empty(t, resp.Msg.GetItems())
+	assert.Empty(t, resp.GetItems())
 
 	dataClear := &kvProto.KvRequest{
 		Storage: storage,
@@ -386,21 +389,23 @@ func testRPCMethodsInMemory(t *testing.T) {
 		},
 	}
 
-	_, err = client.Set(ctx, connect.NewRequest(dataClear))
+	err = client.Call("kv.Set", dataClear, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
-	resp, err = client.Has(ctx, connect.NewRequest(dataClear))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.Has", dataClear, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 5)
+	assert.Len(t, resp.GetItems(), 5)
 
-	_, err = client.Clear(ctx, connect.NewRequest(&kvProto.KvRequest{Storage: storage}))
+	err = client.Call("kv.Clear", &kvProto.KvRequest{Storage: storage}, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
-	resp, err = client.Has(ctx, connect.NewRequest(dataClear))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.Has", dataClear, resp)
 	assert.NoError(t, err)
-	assert.Empty(t, resp.Msg.GetItems())
+	assert.Empty(t, resp.GetItems())
 
-	_, err = client.Clear(ctx, connect.NewRequest(data))
+	err = client.Call("kv.Clear", data, &kvProto.KvResponse{})
 	require.NoError(t, err)
 }
 
@@ -467,7 +472,6 @@ func TestInMemoryKVTracer(t *testing.T) {
 	const storage = "memory-rr"
 
 	client := helpers.NewKVClient(t, "127.0.0.1:6001")
-	ctx := t.Context()
 
 	tt := durationpb.New(time.Second * 30)
 
@@ -478,42 +482,45 @@ func TestInMemoryKVTracer(t *testing.T) {
 			{Key: "b", Value: []byte("bb")},
 		},
 	}
-	_, err = client.Set(ctx, connect.NewRequest(data))
+	err = client.Call("kv.Set", data, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
 	keys := &kvProto.KvRequest{
 		Storage: storage,
 		Items:   []*kvProto.KvItem{{Key: "a"}, {Key: "b"}},
 	}
-	resp, err := client.Has(ctx, connect.NewRequest(keys))
+	resp := &kvProto.KvResponse{}
+	err = client.Call("kv.Has", keys, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 2)
+	assert.Len(t, resp.GetItems(), 2)
 
-	resp, err = client.MGet(ctx, connect.NewRequest(keys))
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.MGet", keys, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 2)
+	assert.Len(t, resp.GetItems(), 2)
 
-	resp, err = client.TTL(ctx, connect.NewRequest(&kvProto.KvRequest{
+	resp = &kvProto.KvResponse{}
+	err = client.Call("kv.TTL", &kvProto.KvRequest{
 		Storage: storage,
 		Items:   []*kvProto.KvItem{{Key: "a"}},
-	}))
+	}, resp)
 	assert.NoError(t, err)
-	assert.Len(t, resp.Msg.GetItems(), 1)
+	assert.Len(t, resp.GetItems(), 1)
 
 	tt2 := durationpb.New(time.Second * 60)
-	_, err = client.MExpire(ctx, connect.NewRequest(&kvProto.KvRequest{
+	err = client.Call("kv.MExpire", &kvProto.KvRequest{
 		Storage: storage,
 		Items:   []*kvProto.KvItem{{Key: "b", Ttl: tt2}},
-	}))
+	}, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
-	_, err = client.Delete(ctx, connect.NewRequest(&kvProto.KvRequest{
+	err = client.Call("kv.Delete", &kvProto.KvRequest{
 		Storage: storage,
 		Items:   []*kvProto.KvItem{{Key: "b"}},
-	}))
+	}, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
-	_, err = client.Clear(ctx, connect.NewRequest(&kvProto.KvRequest{Storage: storage}))
+	err = client.Call("kv.Clear", &kvProto.KvRequest{Storage: storage}, &kvProto.KvResponse{})
 	assert.NoError(t, err)
 
 	stopCh <- struct{}{}
