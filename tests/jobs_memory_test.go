@@ -14,7 +14,6 @@ import (
 	"tests/helpers"
 	mocklogger "tests/mock"
 
-	"connectrpc.com/connect"
 	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v2"
 	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/config/v6"
@@ -1008,7 +1007,7 @@ func declareMemoryPipe(prefetch string) func(t *testing.T) {
 			"prefetch": prefetch,
 			"priority": "33",
 		}}
-		_, err := client.Declare(t.Context(), connect.NewRequest(req))
+		err := client.Call("jobs.Declare", req, &jobsProto.JobsHandlerResponse{})
 		assert.NoError(t, err)
 	}
 }
@@ -1016,7 +1015,7 @@ func declareMemoryPipe(prefetch string) func(t *testing.T) {
 func consumeMemoryPipe(pipelines []string) func(t *testing.T) {
 	return func(t *testing.T) {
 		client := helpers.NewJobsClient(t, "127.0.0.1:6001")
-		_, err := client.Resume(t.Context(), connect.NewRequest(&jobsProto.Pipelines{Pipelines: slices.Clone(pipelines)}))
+		err := client.Call("jobs.Resume", &jobsProto.Pipelines{Pipelines: slices.Clone(pipelines)}, &jobsProto.JobsHandlerResponse{})
 		assert.NoError(t, err)
 	}
 }
