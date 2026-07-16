@@ -199,7 +199,7 @@ func TestSetManyMemory(t *testing.T) {
 	currAlloc := ms.Alloc
 	currNg := runtime.NumGoroutine()
 
-	if currAlloc-prevAlloc > 20_000_000 { // 20MB
+	if currAlloc > prevAlloc && currAlloc-prevAlloc > 20_000_000 { // 20MB
 		t.Log("Prev alloc", prevAlloc)
 		t.Log("Curr alloc", currAlloc)
 		t.Error("Memory leak detected")
@@ -536,12 +536,20 @@ func TestInMemoryKVTracer(t *testing.T) {
 	uniqueNames := slices.Sorted(maps.Keys(spanNames))
 
 	expected := []string{
+		"inmemory:clear",
 		"inmemory:delete",
 		"inmemory:has",
 		"inmemory:mexpire",
 		"inmemory:mget",
 		"inmemory:set",
 		"inmemory:ttl",
+		"kv:clear",
+		"kv:delete",
+		"kv:has",
+		"kv:mexpire",
+		"kv:mget",
+		"kv:set",
+		"kv:ttl",
 	}
 
 	assert.Equal(t, expected, uniqueNames)
