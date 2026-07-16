@@ -536,12 +536,20 @@ func TestInMemoryKVTracer(t *testing.T) {
 	uniqueNames := slices.Sorted(maps.Keys(spanNames))
 
 	expected := []string{
+		"inmemory:clear",
 		"inmemory:delete",
 		"inmemory:has",
 		"inmemory:mexpire",
 		"inmemory:mget",
 		"inmemory:set",
 		"inmemory:ttl",
+		"kv:clear",
+		"kv:delete",
+		"kv:has",
+		"kv:mexpire",
+		"kv:mget",
+		"kv:set",
+		"kv:ttl",
 	}
 
 	assert.Equal(t, expected, uniqueNames)

@@ -280,7 +280,10 @@ func (d *Driver) Delete(ctx context.Context, keys ...string) error {
 	return nil
 }
 
-func (d *Driver) Clear(_ context.Context) error {
+func (d *Driver) Clear(ctx context.Context) error {
+	_, span := d.tracer.Tracer(tracerName).Start(ctx, "inmemory:clear")
+	defer span.End()
+
 	// stop all callbacks
 	close(*d.broadcastStopCh.Load())
 
