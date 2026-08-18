@@ -8,12 +8,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v2"
+	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v1"
 	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
 	goridgeRpc "github.com/roadrunner-server/goridge/v4/pkg/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
@@ -21,7 +20,7 @@ const (
 	pause   = "jobs.Pause"
 	destroy = "jobs.Destroy"
 	resume  = "jobs.Resume"
-	stat    = "jobs.GetStats"
+	stat    = "jobs.Stat"
 )
 
 // dialRPC opens a goridge net/rpc client against the RoadRunner RPC endpoint.
@@ -55,7 +54,7 @@ func ResumePipes(address string, pipes ...string) func(t *testing.T) {
 		client := dialRPC(t, address)
 		defer func() { _ = client.Close() }()
 
-		err := client.Call(resume, &jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}, &jobsProto.JobsHandlerResponse{})
+		err := client.Call(resume, &jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}, &jobsProto.Empty{})
 		require.NoError(t, err)
 	}
 }
@@ -65,7 +64,7 @@ func PushToPipe(pipeline string, autoAck bool, address string) func(t *testing.T
 		client := dialRPC(t, address)
 		defer func() { _ = client.Close() }()
 
-		err := client.Call(push, &jobsProto.PushRequest{Job: createDummyJob(pipeline, autoAck)}, &jobsProto.JobsHandlerResponse{})
+		err := client.Call(push, &jobsProto.PushRequest{Job: createDummyJob(pipeline, autoAck)}, &jobsProto.Empty{})
 		require.NoError(t, err)
 	}
 }
@@ -85,7 +84,7 @@ func PushToDisabledPipe(address, pipeline string) func(t *testing.T) {
 				Pipeline: pipeline,
 			},
 		}}
-		err := client.Call(push, req, &jobsProto.JobsHandlerResponse{})
+		err := client.Call(push, req, &jobsProto.Empty{})
 		require.NoError(t, err)
 	}
 }
@@ -99,14 +98,14 @@ func PushToPipeDelayed(address string, pipeline string, delay int64) func(t *tes
 			Job:     "some/php/namespace",
 			Id:      uuid.NewString(),
 			Payload: []byte(`{"hello":"world"}`),
-			Headers: map[string]*jobsProto.JobHeaderValue{"test": {Values: []string{"test2"}}},
+			Headers: map[string]*jobsProto.HeaderValue{"test": {Value: []string{"test2"}}},
 			Options: &jobsProto.Options{
 				Priority: 1,
 				Pipeline: pipeline,
 				Delay:    delay,
 			},
 		}}
-		err := client.Call(push, req, &jobsProto.JobsHandlerResponse{})
+		err := client.Call(push, req, &jobsProto.Empty{})
 		assert.NoError(t, err)
 	}
 }
@@ -116,7 +115,7 @@ func createDummyJob(pipeline string, autoAck bool) *jobsProto.Job {
 		Job:     "some/php/namespace",
 		Id:      uuid.NewString(),
 		Payload: []byte(`{"hello":"world"}`),
-		Headers: map[string]*jobsProto.JobHeaderValue{"test": {Values: []string{"test2"}}},
+		Headers: map[string]*jobsProto.HeaderValue{"test": {Value: []string{"test2"}}},
 		Options: &jobsProto.Options{
 			AutoAck:  autoAck,
 			Priority: 1,
@@ -131,7 +130,7 @@ func PausePipelines(address string, pipes ...string) func(t *testing.T) {
 		client := dialRPC(t, address)
 		defer func() { _ = client.Close() }()
 
-		err := client.Call(pause, &jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}, &jobsProto.JobsHandlerResponse{})
+		err := client.Call(pause, &jobsProto.Pipelines{Pipelines: slices.Clone(pipes)}, &jobsProto.Empty{})
 		assert.NoError(t, err)
 	}
 }
@@ -162,7 +161,7 @@ func Stats(address string, state *jobState.State) func(t *testing.T) {
 		defer func() { _ = client.Close() }()
 
 		st := &jobsProto.Stats{}
-		err := client.Call(stat, &emptypb.Empty{}, st)
+		err := client.Call(stat, &jobsProto.Empty{}, st)
 		require.NoError(t, err)
 		require.NotEmpty(t, st.GetStats())
 

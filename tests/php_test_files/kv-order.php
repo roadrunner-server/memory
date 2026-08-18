@@ -1,5 +1,6 @@
 <?php
 
+ini_set('display_errors', 'stderr');
 require __DIR__ . '/vendor/autoload.php';
 
 use Nyholm\Psr7\Response;

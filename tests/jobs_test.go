@@ -5,7 +5,7 @@ import (
 
 	"tests/helpers"
 
-	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v2"
+	jobsProto "github.com/roadrunner-server/api-go/v6/jobs/v1"
 	jobState "github.com/roadrunner-server/api-plugins/v6/jobs"
 	"github.com/roadrunner-server/informer/v6"
 	"github.com/roadrunner-server/jobs/v6"
@@ -55,7 +55,7 @@ func declarePipe(t *testing.T, prefetch string) {
 		"priority": "33",
 	}}
 
-	require.NoError(t, client.Call("jobs.Declare", req, &jobsProto.JobsHandlerResponse{}))
+	require.NoError(t, client.Call("jobs.Declare", req, &jobsProto.Empty{}))
 }
 
 // consumePipe resumes consumption on the declared pipeline.
@@ -65,7 +65,7 @@ func consumePipe(t *testing.T) {
 	client := helpers.NewJobsClient(t, rpcAddr)
 	require.NoError(t, client.Call("jobs.Resume",
 		&jobsProto.Pipelines{Pipelines: []string{pipeline}},
-		&jobsProto.JobsHandlerResponse{}))
+		&jobsProto.Empty{}))
 }
 
 // TestBoots covers the plain init config.
