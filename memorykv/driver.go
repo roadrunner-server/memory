@@ -274,7 +274,7 @@ func (d *Driver) Delete(ctx context.Context, keys ...string) error {
 	}
 
 	for _, key := range keys {
-		d.heap.LoadAndDelete(key)
+		d.heap.Delete(key)
 	}
 
 	return nil
