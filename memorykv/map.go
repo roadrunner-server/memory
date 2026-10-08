@@ -30,24 +30,6 @@ func (h *hmap) Set(key string, item *Item) {
 	h.items[key] = item
 }
 
-func (h *hmap) LoadAndDelete(key string) (*Item, bool) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	item, ok := h.items[key]
-	if ok {
-		if item.callback != nil {
-			select {
-			case item.callback.stopCh <- struct{}{}:
-			default:
-			}
-		}
-		delete(h.items, key)
-	}
-
-	return item, ok
-}
-
 func (h *hmap) Clean() {
 	h.mu.Lock()
 	defer h.mu.Unlock()
