@@ -15,7 +15,7 @@ require (
 	github.com/roadrunner-server/informer/v6 v6.0.0-beta.5
 	github.com/roadrunner-server/jobs/v6 v6.0.0-beta.10
 	github.com/roadrunner-server/kv/v6 v6.0.0-beta.8
-	github.com/roadrunner-server/logger/v6 v6.0.0-beta.4
+	github.com/roadrunner-server/logger/v6 v6.0.0
 	github.com/roadrunner-server/memory/v6 v6.0.0-beta.5
 	github.com/roadrunner-server/resetter/v6 v6.0.0-beta.6
 	github.com/roadrunner-server/rpc/v6 v6.0.0
