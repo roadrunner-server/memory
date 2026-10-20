@@ -11,7 +11,7 @@ require (
 	github.com/roadrunner-server/config/v6 v6.0.0
 	github.com/roadrunner-server/endure/v2 v2.7.0
 	github.com/roadrunner-server/goridge/v4 v4.0.0
-	github.com/roadrunner-server/http/v6 v6.0.0
+	github.com/roadrunner-server/http/v6 v6.1.0
 	github.com/roadrunner-server/informer/v6 v6.0.0
 	github.com/roadrunner-server/jobs/v6 v6.0.1
 	github.com/roadrunner-server/kv/v6 v6.0.0
